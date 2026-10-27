@@ -15,7 +15,7 @@ Each gate ships with tests and must pass before the next one starts.
 | Gate | Scope | Status |
 |------|-------|--------|
 | 0 | Project scaffold, config loading, offline health check, CI | Done |
-| 1 | Video ingest: read gameplay footage, sample frames | Planned |
+| 1 | Video ingest: read gameplay footage, sample frames | Done |
 | 2 | Clips: detect key moments, cut highlight clips | Planned |
 | 3 | Voice: speech in and spoken replies | Planned |
 | 4 | Agent: Coach as a teammate that acts through tool calls | Planned |
@@ -29,10 +29,13 @@ source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 cp .env.example .env           # then fill in your keys
 python -m muse_replay health   # shows which model providers are configured
+python -m muse_replay ingest match.mp4 --out frames/ --every 2   # sample frames
 pytest
 ```
 
 The health check never calls the network and never prints key values.
+
+Ingest needs `ffmpeg` and `ffprobe` on your PATH (or set `FFMPEG_BIN` / `FFPROBE_BIN`). It accepts .mp4, .mkv, .mov and .webm up to 3 hours, samples one frame every N seconds (spread evenly when a cap is hit), and writes JPEGs plus `manifest.json`.
 
 ## Models
 
