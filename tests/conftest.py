@@ -30,3 +30,26 @@ def silent_clip(tmp_path_factory):
         pytest.skip("ffmpeg not installed")
     return make_video(tmp_path_factory.mktemp("v") / "silent.mkv", seconds=4, fps=60,
                       size="640x360", audio=False)
+
+
+def make_match(path, seconds=30):
+    """A synthetic 'match': colour bars 0-10s, test pattern 10-20s, mandelbrot 20-30s
+    (hard cuts at 10s and 20s), quiet tone with a loud burst from 24s to 25s."""
+    cmd = ["ffmpeg", "-v", "error", "-y",
+           "-f", "lavfi", "-i", "smptebars=duration=10:size=320x240:rate=30",
+           "-f", "lavfi", "-i", "testsrc=duration=10:size=320x240:rate=30",
+           "-f", "lavfi", "-i", "mandelbrot=size=320x240:rate=30",
+           "-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}",
+           "-filter_complex",
+           "[2:v]trim=duration=10,setpts=PTS-STARTPTS[m];[0:v][1:v][m]concat=n=3:v=1:a=0[v];"
+           "[3:a]volume='if(between(t,24,25),1.0,0.02)':eval=frame[a]",
+           "-map", "[v]", "-map", "[a]", "-pix_fmt", "yuv420p", "-t", str(seconds), str(path)]
+    subprocess.run(cmd, check=True)
+    return path
+
+
+@pytest.fixture(scope="session")
+def match(tmp_path_factory):
+    if not HAS_FFMPEG:
+        pytest.skip("ffmpeg not installed")
+    return make_match(tmp_path_factory.mktemp("m") / "match.mp4")
