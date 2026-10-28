@@ -159,7 +159,8 @@ def transcribe_file(client: MetaClient, wav_path: str | os.PathLike, mode: str =
 
 def clean_for_speech(text: str) -> str:
     """Strip markdown-ish noise and cap length so the voice never rambles."""
-    t = text.replace("*", "").replace("`", "").replace("#", "").replace("_", " ")
+    t = text.replace("\u2014", ", ").replace("\u2013", ", ").replace(" - ", ", ")
+    t = t.replace("*", "").replace("`", "").replace("#", "").replace("_", " ")
     t = " ".join(t.split())
     if len(t) > MAX_SPEAK_CHARS:
         cut = t[:MAX_SPEAK_CHARS]

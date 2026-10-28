@@ -9,3 +9,5 @@ build/
 media/
 *.mp4
 *.mkv
+scripts/windows_check.log
+media/

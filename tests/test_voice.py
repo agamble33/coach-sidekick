@@ -142,6 +142,7 @@ def test_clean_for_speech():
     long = clean_for_speech("word " * 200)
     assert len(long) <= 404 and long.endswith("...")
     assert clean_for_speech("   ") == ""
+    assert clean_for_speech("Hold mid \u2014 I lurk") == "Hold mid, I lurk"
 
 
 def test_speak_uses_injected_runner_and_never_blocks():

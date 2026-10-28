@@ -42,7 +42,7 @@ def main() -> int:
                     context="Game: 2v2 tactical shooter. Round 1 lost, both of us pushed mid.")
     print(f"coach: {r.text}")
     print(f"tokens: in={r.input_tokens} out={r.output_tokens} reasoning={r.reasoning_tokens}")
-    speak(r.text)
+    print(f"spoke via: {speak(r.text)}")
     if len(sys.argv) > 1:
         t = transcribe_file(client, sys.argv[1], mode="ENDPOINTING", keywords=["Coach"])
         print(f"transcript ({t.audio_ms} ms): {t.text!r}  turns={len(t.turns)}")
