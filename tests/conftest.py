@@ -1,10 +1,15 @@
+import os
 import shutil
 import subprocess
 
 import pytest
 
 HAS_FFMPEG = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
-needs_ffmpeg = pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+
+# In CI we set REQUIRE_FFMPEG=1 so a missing ffmpeg fails loudly instead of
+# silently skipping every video test (which would look like a green run).
+if os.environ.get("REQUIRE_FFMPEG") and not HAS_FFMPEG:
+    raise RuntimeError("REQUIRE_FFMPEG is set but ffmpeg/ffprobe are not on PATH")
 
 
 def make_video(path, seconds=10, fps=30, size="320x240", audio=True):

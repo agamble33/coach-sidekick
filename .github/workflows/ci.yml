@@ -13,5 +13,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: ffmpeg -version | head -1
       - run: pip install -e ".[dev]"
-      - run: pytest -q
+      - run: REQUIRE_FFMPEG=1 pytest -q -rs 2>&1 | tee pytest.log
+      - name: Fail if any test was skipped
+        run: "! grep -qE 'skipped|SKIPPED' pytest.log"
