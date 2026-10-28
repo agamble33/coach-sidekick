@@ -77,6 +77,7 @@ def test_look_sends_image_to_model(session):
     assert content[0] == {"type": "input_text", "text": "who is winning?"}
     assert content[1]["type"] == "input_image" and content[1]["image_url"].startswith("data:image/jpeg;base64,/9j/")
     assert sent["payload"]["reasoning"] == {"effort": "low"}
+    assert "no markdown" in sent["payload"]["instructions"]
 
 
 def test_memory_tools_round_trip(session):

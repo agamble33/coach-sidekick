@@ -89,6 +89,9 @@ def t_look(s: Session, args: dict) -> str:
         return f"(no model client) frame at {t:.1f}s captured, {len(data)} bytes"
     payload = {
         "model": VISION_MODEL,
+        "instructions": "You are Coach's eyes. Describe the gameplay frame in one or two plain sentences: "
+                        "what is on screen, who has the advantage, anything the player should react to. "
+                        "Plain text only, no markdown, no em dashes.",
         "input": [{"role": "user", "content": [
             {"type": "input_text", "text": question},
             {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(data).decode()},
