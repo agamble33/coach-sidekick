@@ -18,7 +18,7 @@ Each gate ships with tests and must pass before the next one starts.
 | 1 | Video ingest: read gameplay footage, sample frames | Done |
 | 2 | Clips: detect key moments, cut highlight clips | Done |
 | 3 | Voice: speech in (Muse Voice Transcribe), Coach replies (Muse Spark), spoken replies | Done |
-| 4 | Agent: Coach as a teammate that acts through tool calls | Planned |
+| 4 | Agent: Coach as a teammate that acts through tool calls (look, find_moments, cut_clip, remember, recall, callout) | Done |
 | 5 | Memory and highlight reels (Muse Image) | Planned |
 
 ## Quick start
@@ -33,6 +33,7 @@ python -m muse_replay ingest match.mp4 --out frames/ --every 2   # sample frames
 python -m muse_replay clips match.mp4 --out highlights/ --top 5   # cut highlight clips
 python -m muse_replay transcribe callout.wav --keyword Coach       # speech to text
 python -m muse_replay coach "they're flanking left" --speak          # Coach replies, out loud
+python -m muse_replay play "clip the best moment" --video match.mp4  # Coach acts through tools
 python scripts/live_check.py                                       # live smoke test (uses credits)
 pytest
 ```
@@ -44,6 +45,8 @@ Ingest needs `ffmpeg` and `ffprobe` on your PATH (or set `FFMPEG_BIN` / `FFPROBE
 Clips finds key moments from two signals, scene cuts in the picture and loudness peaks in the audio, merges nearby signals (a cut and a shout together score higher), keeps the top N, pads each into a window that never overlaps another, and writes `clip_NN.mp4` files plus `highlights.json`.
 
 Voice converts any audio or video to the WAV the API accepts (mono, 16-bit, 24 kHz, checked before upload), transcribes it with Muse Voice Transcribe (game vocabulary via `--keyword`), and Coach answers through Muse Spark with reasoning effort set low for fast replies. Spoken output uses the local OS voice (Windows SAPI, macOS say, espeak) since the Meta API has no text-to-speech. See `docs/meta-api.md` for the verified API details.
+
+The agent runs on the Responses API with function tools. Coach can `look` at any second of the match (frame sent to Muse Spark as an image), `find_moments` and `cut_clip` highlights, `remember` and `recall` notes across matches, and `callout` to the player. Tool arguments are validated before use, a bad call returns an error string to the model instead of crashing, parallel calls are supported, and each player turn is capped at 8 model rounds.
 
 ## Models
 

@@ -46,6 +46,29 @@ def main() -> int:
     if len(sys.argv) > 1:
         t = transcribe_file(client, sys.argv[1], mode="ENDPOINTING", keywords=["Coach"])
         print(f"transcript ({t.audio_ms} ms): {t.text!r}  turns={len(t.turns)}")
+    # Agent with tools on a synthetic match (made with ffmpeg, no real footage needed).
+    import subprocess
+    import tempfile
+    from muse_replay.agent import CoachAgent
+    from muse_replay.memory import MatchMemory
+    from muse_replay.tools import Session
+    with tempfile.TemporaryDirectory() as td:
+        video = Path(td) / "match.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "smptebars=duration=10:size=320x240:rate=30",
+                        "-f", "lavfi", "-i", "testsrc=duration=10:size=320x240:rate=30",
+                        "-f", "lavfi", "-i", "sine=frequency=440:duration=20",
+                        "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[v];[2:a]volume='if(between(t,14,15),1.0,0.02)':eval=frame[a]",
+                        "-map", "[v]", "-map", "[a]", "-pix_fmt", "yuv420p", "-t", "20", str(video)], check=True)
+        session = Session(work_dir=Path(td), memory=MatchMemory(Path(td) / "m.json"), match="live-check",
+                          video=str(video), client=client)
+        agent = CoachAgent(client, session)
+        for ask in ["Look at the screen at 15 seconds and tell me what you see.",
+                    "Find the biggest moment and clip it, then remember what happened."]:
+            r = agent.turn(ask)
+            for c in r.tool_calls:
+                print(f"  [tool] {c['name']}({c['arguments']}) -> {c['output'][:120]}")
+            print(f"agent: {r.text}  (rounds={r.rounds}, tokens in={r.input_tokens} out={r.output_tokens})")
+        print(f"memory notes: {len(session.memory)}, clips: {len(list((Path(td) / 'clips').glob('*.mp4'))) if (Path(td) / 'clips').exists() else 0}")
     return 0
 
 

@@ -5,6 +5,7 @@ python -m muse_replay ingest VIDEO --out DIR [--every 2] [--max 120] [--width 76
 python -m muse_replay clips VIDEO --out DIR [--top 5] [--pre 4] [--post 4] [--scene 0.3]
 python -m muse_replay transcribe AUDIO [--mode ENDPOINTING] [--keyword Coach ...]
 python -m muse_replay coach "what should we do?" [--context "..."] [--speak]
+python -m muse_replay play "clip the best moment" --video match.mp4 [--work DIR] [--speak]
 """
 
 from __future__ import annotations
@@ -14,12 +15,15 @@ import json
 import sys
 
 from .health import health_report
+from .agent import CoachAgent
 from .clips import cut_highlights
 from .coach_llm import coach_reply
 from .config import load_settings
 from .ingest import DEFAULT_EVERY_S, DEFAULT_MAX_FRAMES, DEFAULT_WIDTH, IngestError, sample_frames
 from .meta_api import MetaAPIError, MetaClient
+from .memory import MatchMemory
 from .moments import MomentError
+from .tools import Session
 from .voice import VoiceError, speak, to_wav_24k, transcribe_file
 
 
@@ -49,6 +53,12 @@ def _parser() -> argparse.ArgumentParser:
     co.add_argument("text")
     co.add_argument("--context", default="")
     co.add_argument("--speak", action="store_true")
+    pl = sub.add_parser("play", help="one Coach agent turn with tools (video, clips, memory, voice)")
+    pl.add_argument("text")
+    pl.add_argument("--video", default=None)
+    pl.add_argument("--work", default="coach_work")
+    pl.add_argument("--match", default="current match")
+    pl.add_argument("--speak", action="store_true")
     return ap
 
 
@@ -109,7 +119,25 @@ def main(argv: list[str] | None = None) -> int:
         if args.speak:
             speak(r.text)
         return 0
-    print("usage: python -m muse_replay {health,ingest,clips,transcribe,coach} ...", file=sys.stderr)
+    if args.cmd == "play":
+        from pathlib import Path
+        work = Path(args.work)
+        try:
+            client = _client()
+            session = Session(work_dir=work, memory=MatchMemory(work / "memory.json"), match=args.match,
+                              video=args.video, client=client, speak_out_loud=args.speak)
+            r = CoachAgent(client, session).turn(args.text)
+        except (ValueError, MetaAPIError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        for c in r.tool_calls:
+            print(f"[tool] {c['name']}({c['arguments']}) -> {c['output'][:200]}")
+        print(r.text)
+        if args.speak and r.text:
+            speak(r.text)
+        print(json.dumps({"rounds": r.rounds, "input_tokens": r.input_tokens, "output_tokens": r.output_tokens}), file=sys.stderr)
+        return 0
+    print("usage: python -m muse_replay {health,ingest,clips,transcribe,coach,play} ...", file=sys.stderr)
     return 64
 
 
