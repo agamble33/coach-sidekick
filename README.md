@@ -37,7 +37,7 @@ python -m muse_replay coach "they're flanking left" --speak          # Coach rep
 python -m muse_replay play "clip the best moment" --video match.mp4  # Coach acts through tools
 python scripts/live_check.py                                       # live smoke test (uses credits)
 
-# Web app
+# Web app (Windows: double-click scripts\run_coach.cmd)
 pip install -e ".[web]"
 uvicorn web.app:app --reload          # then open http://127.0.0.1:8000
 pytest
