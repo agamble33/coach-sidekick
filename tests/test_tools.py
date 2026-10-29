@@ -51,8 +51,9 @@ def test_find_moments_and_cut_clip_real(session):
     assert found["events"] >= 3 and 1 <= len(found["moments"]) <= 3
     m = found["moments"][0]
     out = json.loads(run_tool(session, "cut_clip", {"start": m["start"], "end": m["end"], "label": "big play!!"}))
-    p = Path(out["file"])
+    p = session.work_dir / "clips" / out["clip"]
     assert p.is_file() and p.stat().st_size > 0 and p.name.startswith("bigplay_")
+    assert "/" not in out["clip"] and "\\" not in out["clip"]
     assert run_tool(session, "cut_clip", {"start": 0, "end": 31}).startswith("error: end must be between")
 
 

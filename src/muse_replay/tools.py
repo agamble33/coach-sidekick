@@ -124,7 +124,7 @@ def t_cut_clip(s: Session, args: dict) -> str:
     label = "".join(c for c in str(args.get("label", "clip")) if c.isalnum() or c in "-_")[:40] or "clip"
     out = s.work_dir / "clips" / f"{label}_{start:06.1f}-{end:06.1f}.mp4"
     cut_clip(info, start, end, out)
-    return json.dumps({"file": str(out), "seconds": round(end - start, 2)})
+    return json.dumps({"clip": out.name, "seconds": round(end - start, 2)})
 
 
 def t_remember(s: Session, args: dict) -> str:
