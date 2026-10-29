@@ -109,6 +109,7 @@ def test_turn_without_match_and_validation(client, monkeypatch):
     monkeypatch.setattr(webapp, "CoachAgent", FakeAgent)
     assert "hi" in c.post("/api/turn", json={"text": "hello"}).text
     assert c.post("/api/turn", json={"text": ""}).status_code == 422
+    assert c.post("/api/turn", json={"text": "   "}).status_code == 422
     assert c.post("/api/turn", json={"text": "x" * 5000}).status_code == 422
 
 
@@ -163,3 +164,45 @@ def test_unconfigured_api_gives_503(client, monkeypatch):
     webapp.app.state.client_factory = boom
     webapp._agents.clear()
     assert c.post("/api/turn", json={"text": "hello"}).status_code == 503
+
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64 + b"\xff\xd9"
+
+
+def test_live_session_frames_and_stop(client):
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    assert c.post(f"/api/live/{lid}/frame", files={"file": ("f.jpg", b"nope", "image/jpeg")}).status_code == 400
+    r = c.post(f"/api/live/{lid}/frame", files={"file": ("f.jpg", JPEG, "image/jpeg")})
+    assert r.status_code == 200 and r.json()["frames"] == 1
+    assert c.post("/api/live/zzzz/frame", files={"file": ("f.jpg", JPEG, "image/jpeg")}).status_code == 404
+    assert c.post(f"/api/live/{lid}/stop").json()["ok"] is True
+    assert c.post(f"/api/live/{lid}/frame", files={"file": ("f.jpg", JPEG, "image/jpeg")}).status_code == 404
+
+
+def test_watch_turn_uses_live_feed(client, monkeypatch):
+    c, webapp = client
+    from muse_replay.agent import WATCH_PROMPT
+    seen = {}
+
+    class FakeAgent:
+        def __init__(self, client, session, **kw):
+            self.session, self.on_event = session, (lambda k, d: None)
+            seen["live"] = session.live
+            seen["match"] = session.match
+        def turn(self, text):
+            seen["text"] = text
+            return TurnResult(text="quiet")
+
+    monkeypatch.setattr(webapp, "CoachAgent", FakeAgent)
+    lid = c.post("/api/live/start").json()["live_id"]
+    c.post(f"/api/live/{lid}/frame", files={"file": ("f.jpg", JPEG, "image/jpeg")})
+    r = c.post("/api/turn", json={"live_id": lid, "watch": True})
+    assert r.status_code == 200 and "quiet" in r.text
+    assert seen["text"] == WATCH_PROMPT and seen["match"] == "live session" and len(seen["live"]) == 1
+    # a normal question on the same live session reuses the agent
+    c.post("/api/turn", json={"live_id": lid, "text": "what do you see?"})
+    assert seen["text"] == "what do you see?"
+    assert c.post("/api/turn", json={"watch": True}).status_code == 400
+    assert c.post("/api/turn", json={"live_id": "nope", "text": "hi"}).status_code == 404

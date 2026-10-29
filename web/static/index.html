@@ -112,6 +112,9 @@
   .brand .mark{background:linear-gradient(145deg,#1877F2,#6D5BFF)}
   .timeline.playing .head{display:block}
   .legend{display:flex;gap:14px;margin-top:8px;font-size:12.5px;color:var(--text-2)}
+  .livedot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--red);margin-right:8px;vertical-align:1px;animation:pulse 1.4s infinite}
+  .livebadge{position:absolute;top:12px;left:12px;padding:3px 9px;border-radius:9999px;background:rgba(255,80,80,.92);color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.06em}
+  .livebadge.idle{background:rgba(120,120,120,.8)}
   .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 
   /* clips */
@@ -184,6 +187,10 @@
         </label>
         <input id="file" type="file" accept=".mp4,.mkv,.mov,.webm,video/*" hidden>
         <button id="sample" class="btn secondary">Use the sample match</button>
+        <button id="golive" class="btn secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Go live: share my game
+        </button>
         <span id="upmsg" class="status" style="color:var(--text-2);font-size:13px"></span>
       </div>
       <div class="aud">
@@ -192,8 +199,20 @@
       </div>
     </div>
 
+    <div id="liveCard" class="card" hidden>
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div><h2><span class="livedot"></span>Live: Coach is watching your game</h2><p class="sub" id="liveInfo" style="margin:0">Sharing your screen. A frame goes to Coach every few seconds.</p></div>
+        <div class="row">
+          <label class="toggle" title="Coach looks on its own and calls out only when something matters"><input id="autowatch" type="checkbox" checked> Auto callouts</label>
+          <button id="stoplive" class="btn secondary">Stop sharing</button>
+        </div>
+      </div>
+      <div class="player"><video id="liveVideo" autoplay muted playsinline></video><div class="livebadge" id="liveBadge">LIVE</div></div>
+      <canvas id="grab" hidden></canvas>
+    </div>
+
     <div class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>7 live · 3 on the way</span></div>
+      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>8 live · 2 on the way</span></div>
       <p class="sub">Every live feature runs on Meta models through the Model API.</p>
       <div class="feats">
         <div class="feat"><div class="fi">
@@ -217,9 +236,9 @@
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></div>
           <b>Moment timeline</b><span>Every detected moment on the timeline, color-coded by signal. Click to jump straight to it.</span><em class="live">Live</em></div>
-        <div class="feat soon"><div class="fi">
+        <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-          <b>Live mode</b><span>Share your screen and Coach watches the match as it happens, calling out in real time instead of after.</span><em>On the way</em></div>
+          <b>Live mode</b><span>Share your screen and Coach watches the match as it happens, calling out on its own when something matters.</span><em class="live">Live</em></div>
         <div class="feat soon"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
           <b>Playbook for studios</b><span>Give Coach your game's rules, controls and goals. It teaches new players while they play. No tutorial level required.</span><em>On the way</em></div>
@@ -266,7 +285,7 @@
       <div class="msg from-coach">Hey, I'm Coach. Load a match and tell me what you want: a read on a moment, the best clip, or what we learned last time.</div>
     </div>
     <div class="tips" id="tips">
-      <button class="tip" data-t="What's happening at 15 seconds?">What's happening at 15 seconds?</button>
+      <button class="tip" data-t="What's happening at 15 seconds?" data-mode="match">What's happening at 15 seconds?</button><button class="tip" data-t="What do you see right now?" data-mode="live" hidden>What do you see right now?</button><button class="tip" data-t="What should I do next?" data-mode="live" hidden>What should I do next?</button>
       <button class="tip" data-t="Find the biggest moment and clip it.">Clip the biggest moment</button>
       <button class="tip" data-t="Remember: we lose rounds when we both push mid.">Remember a lesson</button>
       <button class="tip" data-t="What did we learn last match?">What did we learn?</button>
@@ -290,7 +309,7 @@
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const state = { match: null, busy: false, rec: null, chunks: [] };
+  const state = { match: null, busy: false, rec: null, chunks: [], live: null, liveStream: null, frameTimer: null, watchTimer: null, lastWatch: 0 };
 
   // ---------- helpers ----------
   const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
@@ -312,6 +331,7 @@
 
   // ---------- match ----------
   function showMatch(m){
+    if(state.live) stopLive();
     state.match=m;
     $('hero').hidden=true; $('matchCard').hidden=false; $('clipsCard').hidden=false;
     $('matchName').textContent=m.name;
@@ -351,23 +371,27 @@
   $('sample').onclick=sample; $('sample2').onclick=sample;
 
   // ---------- turn (SSE over fetch) ----------
-  async function send(text){
-    text=(text||$('input').value).trim(); if(!text||state.busy) return;
-    $('input').value=''; state.busy=true; $('send').disabled=true; setStatus('Thinking…', true);
-    add('msg me', esc(text));
+  async function send(text, opts={}){
+    const watch=!!opts.watch;
+    text=watch?'':(text||$('input').value).trim(); if((!text&&!watch)||state.busy) return;
+    $('input').value=''; state.busy=true; $('send').disabled=true; setStatus(watch?'Watching…':'Thinking…', true);
+    if(!watch) add('msg me', esc(text));
     let step=null;
     try{
-      const r=await fetch('/api/turn',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({match_id:state.match?state.match.id:null,text})});
+      const r=await fetch('/api/turn',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({match_id:state.match?state.match.id:null,live_id:state.live,text:watch?null:text,watch})});
       if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.detail||('HTTP '+r.status)); }
       const reader=r.body.getReader(); const dec=new TextDecoder(); let buf='';
       while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
         let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
           const ev=/^event: (\w+)/m.exec(block)?.[1]; const data=JSON.parse(/^data: (.*)$/m.exec(block)?.[1]||'{}');
           if(ev==='tool_call'){ setStatus(`Using ${data.name}…`, true);
+            if(watch && data.name==='look_now'){ step=null; continue; }
             step=add('step',`<div class="t"><span class="spin"></span>Coach is using <span class="k">${esc(data.name)}</span></div><div class="a">${esc(data.arguments||'')}</div>`); }
           else if(ev==='tool_result' && step){ step.querySelector('.spin').outerHTML='<span class="ok">✓</span>'; const o=document.createElement('div'); o.className='o'; o.textContent=data.output; step.appendChild(o);
             if(data.name==='cut_clip') refreshMatch(); if(data.name==='remember') loadMemory(); if(data.name==='callout'){ const m=/\): (.*)$/s.exec(data.output); if(m) speak(m[1]); } }
-          else if(ev==='done'){ add('msg from-coach', esc(data.text||'(no reply)')); speak(data.text); $('usage').textContent=`${data.rounds} round${data.rounds===1?'':'s'} · ${data.input_tokens+data.output_tokens} tokens`; }
+          else if(ev==='done'){ const quiet=watch && /^quiet\.?$/i.test((data.text||'').trim());
+            if(!quiet){ add('msg from-coach', esc(data.text||'(no reply)')); speak(data.text); }
+            $('usage').textContent=`${data.rounds} round${data.rounds===1?'':'s'} · ${data.input_tokens+data.output_tokens} tokens`; }
           else if(ev==='error'){ add('msg err', esc(data.message)); }
         } }
     }catch(e){ add('msg err','Coach could not answer: '+e.message); }
@@ -377,6 +401,45 @@
   $('input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } });
   $('input').addEventListener('input',e=>{ e.target.style.height='auto'; e.target.style.height=Math.min(120,e.target.scrollHeight)+'px'; });
   $('tips').addEventListener('click',e=>{ const t=e.target.closest('.tip'); if(t) send(t.dataset.t); });
+  function tipsMode(m){ [...document.querySelectorAll('.tip[data-mode]')].forEach(t=>{ t.hidden = t.dataset.mode!==m; }); }
+
+  // ---------- live mode (screen share) ----------
+  const FRAME_EVERY_MS=4000, WATCH_EVERY_MS=20000, FRAME_W=960;
+  async function goLive(){
+    if(state.live) return;
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){ add('msg err','Screen sharing needs a secure (https) page in a desktop browser.'); return; }
+    try{
+      const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:5},audio:false});
+      const r=await fetch('/api/live/start',{method:'POST'}); const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+      state.live=j.live_id; state.liveStream=stream;
+      const v=$('liveVideo'); v.srcObject=stream; await v.play().catch(()=>{});
+      $('hero').hidden=true; $('matchCard').hidden=true; $('liveCard').hidden=false; tipsMode('live');
+      stream.getVideoTracks()[0].addEventListener('ended', stopLive);
+      add('msg from-coach',"I'm watching your screen. Play normally; I'll call out when something matters, or ask me anything.");
+      setStatus('Watching your game', true);
+      state.frameTimer=setInterval(pushFrame, FRAME_EVERY_MS); pushFrame();
+      state.watchTimer=setInterval(()=>{ if($('autowatch').checked && !state.busy) send('',{watch:true}); }, WATCH_EVERY_MS);
+    }catch(e){ add('msg err','Could not start live mode: '+e.message); }
+  }
+  async function pushFrame(){
+    if(!state.live) return; const v=$('liveVideo'); if(!v.videoWidth) return;
+    const c=$('grab'); const scale=Math.min(1, FRAME_W/v.videoWidth); c.width=Math.round(v.videoWidth*scale); c.height=Math.round(v.videoHeight*scale);
+    c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+    const blob=await new Promise(res=>c.toBlob(res,'image/jpeg',0.7)); if(!blob) return;
+    const fd=new FormData(); fd.append('file',blob,'frame.jpg');
+    try{ const r=await fetch(`/api/live/${state.live}/frame`,{method:'POST',body:fd}); $('liveBadge').className='livebadge'+(r.ok?'':' idle'); $('liveInfo').textContent=`Sharing ${c.width}×${c.height}. A frame goes to Coach every ${FRAME_EVERY_MS/1000}s; auto callouts every ${WATCH_EVERY_MS/1000}s.`; }
+    catch(e){ $('liveBadge').className='livebadge idle'; }
+  }
+  async function stopLive(){
+    if(!state.live) return;
+    clearInterval(state.frameTimer); clearInterval(state.watchTimer);
+    try{ state.liveStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    const id=state.live; state.live=null; state.liveStream=null;
+    fetch(`/api/live/${id}/stop`,{method:'POST'}).catch(()=>{});
+    $('liveCard').hidden=true; if(state.match) $('matchCard').hidden=false; else $('hero').hidden=false; tipsMode('match');
+    setStatus('Ready when you are', false); add('msg from-coach','Stopped watching. Load a match or go live again whenever.');
+  }
+  $('golive').onclick=goLive; $('stoplive').onclick=stopLive;
 
   // ---------- mic (push to talk) ----------
   async function startRec(){

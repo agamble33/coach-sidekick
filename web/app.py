@@ -11,6 +11,10 @@ Routes
   POST /api/turn              {match_id, text} -> SSE stream of tool events then the reply
   POST /api/transcribe        audio blob (any format) -> {transcript}
   GET  /api/memory            notes Coach has saved
+  POST /api/live/start        -> {live_id}        (screen-share session)
+  POST /api/live/{id}/frame   JPEG of the player's screen (every few seconds)
+  POST /api/live/{id}/stop
+  POST /api/turn {live_id, text|watch:true}  Coach turn against the live screen
 """
 
 from __future__ import annotations
@@ -31,7 +35,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from muse_replay.agent import CoachAgent
+from muse_replay.agent import WATCH_PROMPT, CoachAgent
 from muse_replay.clips import detect_audio_events, detect_scene_events
 from muse_replay.config import load_settings
 from muse_replay.health import health_report
@@ -39,7 +43,7 @@ from muse_replay.ingest import VIDEO_SUFFIXES, IngestError, probe
 from muse_replay.memory import MatchMemory
 from muse_replay.meta_api import MetaAPIError, MetaClient
 from muse_replay.moments import pick_clips
-from muse_replay.tools import Session
+from muse_replay.tools import LiveFeed, Session
 from muse_replay.voice import VoiceError, to_wav_24k, transcribe_file
 
 STATIC = Path(__file__).parent / "static"
@@ -51,6 +55,8 @@ app = FastAPI(title="Muse Replay: Coach")
 _lock = threading.Lock()
 _agents: dict[str, CoachAgent] = {}
 _matches: dict[str, dict] = {}
+_live: dict[str, LiveFeed] = {}
+MAX_LIVE = 20
 
 
 def _client_factory() -> MetaClient:
@@ -169,34 +175,81 @@ def get_clip(mid: str, name: str):
 
 class TurnIn(BaseModel):
     match_id: str | None = None
-    text: str = Field(min_length=1, max_length=4000)
+    live_id: str | None = None
+    text: str | None = Field(default=None, max_length=4000)
+    watch: bool = False
 
 
-def _agent_for(mid: str | None) -> CoachAgent:
-    key = mid or "none"
+def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
+    key = f"live:{live_id}" if live_id else (mid or "none")
     with _lock:
         if key not in _agents:
             meta = _load(mid) if mid else None
+            feed = None
+            if live_id:
+                feed = _live.get(live_id)
+                if feed is None:
+                    raise HTTPException(404, "live session not found")
             try:
                 client = app.state.client_factory()
             except MetaAPIError as exc:
                 raise HTTPException(503, str(exc))
             session = Session(work_dir=Path(meta["video"]).parent if meta else DATA / "scratch",
-                              memory=app.state.memory, match=meta["name"] if meta else "no match",
-                              video=meta["video"] if meta else None, client=client)
+                              memory=app.state.memory,
+                              match=meta["name"] if meta else ("live session" if live_id else "no match"),
+                              video=meta["video"] if meta else None, client=client, live=feed)
             _agents[key] = CoachAgent(client, session)
         return _agents[key]
 
 
+@app.post("/api/live/start")
+def live_start():
+    with _lock:
+        if len(_live) >= MAX_LIVE:
+            oldest = min(_live, key=lambda k: _live[k].started)
+            _live.pop(oldest, None); _agents.pop(f"live:{oldest}", None)
+        lid = secrets.token_hex(8)
+        _live[lid] = LiveFeed()
+    return {"live_id": lid}
+
+
+@app.post("/api/live/{lid}/frame")
+async def live_frame(lid: str, file: UploadFile = File(...)):
+    feed = _live.get(lid)
+    if feed is None:
+        raise HTTPException(404, "live session not found")
+    data = await file.read()
+    try:
+        feed.push(data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"ok": True, "frames": len(feed)}
+
+
+@app.post("/api/live/{lid}/stop")
+def live_stop(lid: str):
+    with _lock:
+        _live.pop(lid, None)
+        _agents.pop(f"live:{lid}", None)
+    return {"ok": True}
+
+
 @app.post("/api/turn")
 def turn(body: TurnIn):
-    agent = _agent_for(body.match_id)
+    text = (body.text or "").strip()
+    if body.watch:
+        if not body.live_id:
+            raise HTTPException(400, "watch needs a live_id")
+        text = WATCH_PROMPT
+    if not text:
+        raise HTTPException(422, "text is required")
+    agent = _agent_for(body.match_id, body.live_id)
     q: queue.Queue = queue.Queue()
     agent.on_event = lambda kind, data: q.put((kind, data))
 
     def work():
         try:
-            r = agent.turn(body.text)
+            r = agent.turn(text)
             q.put(("done", {"text": r.text, "rounds": r.rounds, "input_tokens": r.input_tokens,
                             "output_tokens": r.output_tokens, "spoken": agent.session.spoken[-3:]}))
         except (MetaAPIError, ValueError) as exc:

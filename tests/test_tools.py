@@ -115,3 +115,46 @@ def test_memory_caps_and_matches(tmp_path):
     last_m0 = m.recall("m0", limit=2)
     assert [n.text for n in last_m0] == ["note 201", "note 204"]
     assert all(n.match == "m0" for n in m.recall("m0", limit=5))
+
+
+# ---- live mode ----
+
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64 + b"\xff\xd9"
+
+
+def test_live_feed_validates_and_keeps_latest():
+    from muse_replay.tools import LiveFeed
+    f = LiveFeed(keep=2)
+    assert f.latest() is None and f.age_s() is None
+    with pytest.raises(ValueError):
+        f.push(b"not a jpeg")
+    with pytest.raises(ValueError):
+        f.push(b"\xff\xd8" + b"\x00" * (2 * 1024 * 1024 + 1))
+    f.push(JPEG, ts=1.0); f.push(JPEG + b"x", ts=2.0); f.push(JPEG + b"xy", ts=3.0)
+    assert len(f) == 2 and f.latest()[0] == 3.0
+
+
+def test_look_now_without_live_or_stale(tmp_path):
+    from muse_replay.tools import LiveFeed
+    s = Session(work_dir=tmp_path, memory=MatchMemory(tmp_path / "m.json"))
+    assert run_tool(s, "look_now", {}) == "error: live mode is off; ask the player to share their screen"
+    s.live = LiveFeed(); s.live.push(JPEG, ts=0.0)          # 1970: very stale
+    assert run_tool(s, "look_now", {}).startswith("error: last frame is")
+
+
+def test_look_now_sends_latest_frame(tmp_path):
+    from muse_replay.tools import LiveFeed
+    sent = {}
+
+    class FakeClient:
+        def post_json(self, path, payload):
+            sent.update(payload=payload)
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": "Enemy pushing B, you are low."}]}]}
+
+    s = Session(work_dir=tmp_path, memory=MatchMemory(tmp_path / "m.json"), client=FakeClient())
+    s.live = LiveFeed(); s.live.push(JPEG)
+    out = run_tool(s, "look_now", {"question": "any danger?"})
+    assert out.endswith("Enemy pushing B, you are low.") and out.startswith("[0s ago]")
+    c = sent["payload"]["input"][0]["content"]
+    assert c[0]["text"] == "any danger?" and c[1]["image_url"].startswith("data:image/jpeg;base64,/9j/")
+    assert "look_now" in {t["name"] for t in tool_specs()}

@@ -9,6 +9,8 @@ import base64
 import json
 import os
 import tempfile
+import time
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -21,6 +23,33 @@ from .moments import MomentError, pick_clips
 from .voice import speak
 
 VISION_MODEL = "muse-spark-1.3"
+LIVE_MAX_FRAME_BYTES = 2 * 1024 * 1024
+LIVE_STALE_S = 30.0
+
+
+class LiveFeed:
+    """Latest screen frames pushed by the player's browser (live mode)."""
+
+    def __init__(self, keep: int = 3):
+        self._frames: deque[tuple[float, bytes]] = deque(maxlen=keep)
+        self.started = time.time()
+
+    def push(self, jpeg: bytes, ts: float | None = None) -> None:
+        if not jpeg or jpeg[:2] != b"\xff\xd8":
+            raise ValueError("frame must be a JPEG")
+        if len(jpeg) > LIVE_MAX_FRAME_BYTES:
+            raise ValueError("frame larger than 2 MB")
+        self._frames.append((time.time() if ts is None else ts, jpeg))
+
+    def latest(self) -> tuple[float, bytes] | None:
+        return self._frames[-1] if self._frames else None
+
+    def age_s(self) -> float | None:
+        f = self.latest()
+        return None if f is None else round(time.time() - f[0], 1)
+
+    def __len__(self) -> int:
+        return len(self._frames)
 
 
 @dataclass
@@ -33,6 +62,7 @@ class Session:
     client: MetaClient | None = None
     speak_out_loud: bool = False
     spoken: list[str] = field(default_factory=list)
+    live: LiveFeed | None = None
     _info: VideoInfo | None = None
 
     def info(self) -> VideoInfo:
@@ -78,7 +108,7 @@ def t_video_info(s: Session, args: dict) -> str:
 
 
 def t_look(s: Session, args: dict) -> str:
-    """Grab the frame at time t and ask the vision model what is happening."""
+    """Grab the frame at time t from the loaded video and ask the vision model what is happening."""
     info = s.info()
     t = _num(args, "t", lo=0, hi=info.duration_s)
     question = str(args.get("question") or "What is happening in this gameplay frame? Be specific and brief.")
@@ -87,6 +117,10 @@ def t_look(s: Session, args: dict) -> str:
         data = Path(frames[0].path).read_bytes()
     if s.client is None:
         return f"(no model client) frame at {t:.1f}s captured, {len(data)} bytes"
+    return _describe(s, data, question)
+
+
+def _describe(s: Session, jpeg: bytes, question: str) -> str:
     payload = {
         "model": VISION_MODEL,
         "instructions": "You are Coach's eyes. Describe the gameplay frame in one or two plain sentences: "
@@ -94,7 +128,7 @@ def t_look(s: Session, args: dict) -> str:
                         "Plain text only, no markdown, no em dashes.",
         "input": [{"role": "user", "content": [
             {"type": "input_text", "text": question},
-            {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(data).decode()},
+            {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()},
         ]}],
         "reasoning": {"effort": "low"}, "stream": False,
     }
@@ -102,6 +136,20 @@ def t_look(s: Session, args: dict) -> str:
     texts = [c.get("text", "") for item in resp.get("output", []) if item.get("type") == "message"
              for c in item.get("content", []) if c.get("type") == "output_text"]
     return " ".join(texts).strip() or "(vision model returned no text)"
+
+
+def t_look_now(s: Session, args: dict) -> str:
+    """Look at the player's live screen (latest shared frame)."""
+    if s.live is None or s.live.latest() is None:
+        raise ValueError("live mode is off; ask the player to share their screen")
+    ts, jpeg = s.live.latest()
+    age = s.live.age_s() or 0.0
+    if age > LIVE_STALE_S:
+        raise ValueError(f"last frame is {age:.0f}s old; the screen share may have stopped")
+    question = str(args.get("question") or "What is happening on the player's screen right now? Be specific and brief.")
+    if s.client is None:
+        return f"(no model client) live frame {age:.1f}s old, {len(jpeg)} bytes"
+    return f"[{age:.0f}s ago] " + _describe(s, jpeg, question)
 
 
 def t_find_moments(s: Session, args: dict) -> str:
@@ -157,6 +205,9 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
          {"type": "object", "properties": {"t": {"type": "number", "description": "seconds into the video"},
                                            "question": {"type": "string", "description": "what to look for"}},
           "required": ["t"], "additionalProperties": False}, t_look),
+    Tool("look_now", "Look at the player's live screen right now (live mode). Use this for anything happening in the current game.",
+         {"type": "object", "properties": {"question": {"type": "string", "description": "what to look for"}},
+          "additionalProperties": False}, t_look_now),
     Tool("find_moments", "Find the biggest moments in the match (scene cuts and loud audio), ranked.",
          {"type": "object", "properties": {"top": {"type": "integer", "minimum": 1, "maximum": 20}},
           "additionalProperties": False}, t_find_moments),

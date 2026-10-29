@@ -18,7 +18,7 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026) on Meta
 | Finds and cuts highlights | Scene changes and loud moments ranked into clips | Live |
 | Remembers the lesson | Match memory that persists across matches | Live |
 | Moment timeline | Detected moments on a clickable timeline | Live |
-| Live mode | Screen share so Coach watches the match as it happens | On the way |
+| Live mode | Share your screen; a frame goes to Coach every 4 s and it calls out on its own when something matters | Live |
 | Playbook for studios | Rules, controls and goals that Coach teaches new players while they play | On the way |
 | Highlight reel | Clips stitched into a reel with poster frames from Muse Image | On the way |
 
@@ -38,7 +38,8 @@ Each gate ships with tests and must pass before the next one starts.
 | 3 | Voice: speech in (Muse Voice Transcribe), Coach replies (Muse Spark), spoken replies | Done |
 | 4 | Agent: Coach as a teammate that acts through tool calls (look, find_moments, cut_clip, remember, recall, callout) | Done |
 | 5 | Web app: match player, moment timeline, live tool-call feed, voice in/out, clips, memory | Done |
-| 6 | Highlight reels with Muse Image, hosted demo | Planned |
+| 6 | Live mode: screen share, look_now tool, auto callouts | Done |
+| 7 | Playbook for studios, highlight reel with Muse Image, hosted demo | Planned |
 
 ## Quick start
 
