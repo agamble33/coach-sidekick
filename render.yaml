@@ -1,0 +1,19 @@
+# Render blueprint: connect the repo, set META_API_KEY in the dashboard, deploy.
+services:
+  - type: web
+    name: coach-muse-replay
+    runtime: docker
+    plan: starter
+    region: ohio
+    healthCheckPath: /api/health
+    envVars:
+      - key: META_API_KEY
+        sync: false            # set in the Render dashboard, never in the repo
+      - key: META_BASE_URL
+        value: https://api.meta.ai/v1
+      - key: COACH_DATA
+        value: /data
+    disk:
+      name: coach-data
+      mountPath: /data
+      sizeGB: 5

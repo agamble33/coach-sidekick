@@ -44,6 +44,23 @@ Each gate ships with tests and must pass before the next one starts.
 | 8 | Gameplay data: annotation records, ratings, learned examples, training export | Done |
 | 9 | Highlight reel with Muse Image, hosted demo | Planned |
 
+## For judges: how to try Coach in 3 minutes
+
+1. **Open the hosted demo** (link in the submission) or run it locally with the Quick start below.
+2. Click **Use the sample match**. The timeline shows the moments Coach detected (blue = scene change, amber = loud moment).
+3. Click **Clip the biggest moment**. Watch the right panel: Coach calls `find_moments`, `cut_clip` and `remember` itself. Each step card shows the real tool call and result. The clip appears under Highlights, the note under Match memory.
+4. Click **What's happening at 15 seconds?** Coach calls `look`, sends the frame to Muse Spark, and describes it.
+5. **Go live: share my game.** Share any window (a gameplay video in another tab works). Every 20 s Coach looks and calls out only if something matters. Ask "What should I do next?" any time.
+6. **Studio playbook.** Click **Fill a sample**, **Save playbook**, turn on **New player mode**, then go live. Coach teaches from the playbook as things come up.
+7. **Rate anything** with the thumbs. Thumbs down opens a correction box; the next reply already uses it. **Export training set** writes chat-tuning JSONL.
+8. Hold the **mic** to talk instead of typing (Muse Voice Transcribe).
+
+Meta models used: Muse Spark 1.3 (reasoning, tool calling, vision), Muse Voice Transcribe 1.0 (speech to text), both through the Meta Model API Responses endpoint. The hosted demo needs no login.
+
+## Deploy (Render)
+
+`render.yaml` and the `Dockerfile` are included. Connect the repo on Render, set `META_API_KEY` in the dashboard (never in the repo), and deploy. Data persists on the mounted `/data` disk.
+
 ## Quick start
 
 ```bash

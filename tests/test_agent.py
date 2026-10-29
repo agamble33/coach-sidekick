@@ -166,3 +166,13 @@ def test_watch_tick_quiet_is_not_recorded(tmp_path):
     agent.session.annotations = AnnotationStore(tmp_path / "ann.jsonl")
     r = agent.turn(WATCH_PROMPT)
     assert r.record_id == "" and agent.session.annotations.stats()["records"] == 0
+
+
+def test_ticks_use_the_small_tool_set(tmp_path):
+    from muse_replay.agent import LIVE_TICK_TOOLS, WATCH_PROMPT
+    t = Scripted([msg("quiet", rid="r1"), msg("ok", rid="r2")])
+    agent = make_agent(tmp_path, t)
+    agent.turn(WATCH_PROMPT)
+    assert [x["name"] for x in t.payloads[0]["tools"]] == LIVE_TICK_TOOLS
+    agent.turn("what now?")
+    assert len(t.payloads[1]["tools"]) > len(LIVE_TICK_TOOLS)

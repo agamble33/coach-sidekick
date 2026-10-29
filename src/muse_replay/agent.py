@@ -15,6 +15,7 @@ from .meta_api import MetaAPIError, MetaClient
 from .tools import Session, run_tool, tool_specs
 
 MAX_ROUNDS = 8
+LIVE_TICK_TOOLS = ["look_now", "callout", "remember", "recall"]   # what a watch/teach tick can use
 AGENT_SYSTEM = COACH_SYSTEM + (
     " You have tools: look_now sees the player's live screen, look sees a loaded match video at a time, "
     "find_moments and cut_clip make highlights, remember and recall are match memory, callout speaks to the "
@@ -78,30 +79,34 @@ class CoachAgent:
         self.last_response_id: str | None = None
         self.tools = tool_specs()
 
-    def _request(self, input_items: list, previous: str | None) -> dict:
+    def _request(self, input_items: list, previous: str | None, tools: list | None = None) -> dict:
         payload = {
             "model": self.model, "instructions": instructions_for(self.session), "input": input_items,
-            "tools": self.tools, "tool_choice": "auto", "parallel_tool_calls": True,
+            "tools": self.tools if tools is None else tools, "tool_choice": "auto", "parallel_tool_calls": True,
             "reasoning": {"effort": self.effort}, "stream": False,
         }
         if previous:
             payload["previous_response_id"] = previous
         return self.client.post_json("/responses", payload)
 
-    def turn(self, player_text: str) -> TurnResult:
+    def turn(self, player_text: str, tool_names: list[str] | None = None) -> TurnResult:
         player_text = " ".join(player_text.split())[:4000]
         if not player_text:
             raise ValueError("player_text is empty")
+        is_tick = player_text in (WATCH_PROMPT, TEACH_PROMPT)
+        if tool_names is None and is_tick:
+            tool_names = LIVE_TICK_TOOLS
+        tools = None if tool_names is None else tool_specs(tool_names)
         result = TurnResult(text="")
         pending: list = [{"role": "user", "content": [{"type": "input_text", "text": player_text}]}]
         previous = self.last_response_id
         for _ in range(self.max_rounds):
             try:
-                resp = self._request(pending, previous)
+                resp = self._request(pending, previous, tools)
             except MetaAPIError as exc:
                 if previous and exc.status in (400, 404):      # stale thread: retry fresh
                     previous = None
-                    resp = self._request(pending, None)
+                    resp = self._request(pending, None, tools)
                 else:
                     raise
             result.rounds += 1
@@ -127,7 +132,6 @@ class CoachAgent:
         else:
             result.text = result.text or "Let me pause there. What do you want me to do next?"
         self.last_response_id = result.response_id
-        is_tick = player_text in (WATCH_PROMPT, TEACH_PROMPT)
         rid = "" if (is_tick or result.text.strip().lower() == "quiet") else self.session.record("reply", result.text, player_text)
         result.record_id = rid
         self.on_event("text", {"text": result.text, "record_id": rid})
