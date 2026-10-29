@@ -1,8 +1,26 @@
-# Muse Replay: Coach, an AI co-op teammate
+# Coach, by Muse Replay
 
-Coach joins your game as a co-op teammate. It watches through video, talks through voice, and acts through tool calls. It also remembers your last match and can cut highlight reels.
+**An in-game AI sidekick.** Coach plays with you, not for you: live strategy while you play, a guide that teaches new players by playing alongside them, and a teammate that remembers what happened last match. It sees the game, hears you, talks back, and acts through tool calls.
 
-Built for the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026) on Meta's Muse models.
+- **For players:** a teammate on voice chat that watches your screen, calls out what matters, and clips the plays worth keeping.
+- **For studios:** drop in a playbook and Coach onboards new players inside the game. No training portal, no tutorial level to build.
+
+Built for the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026) on Meta's Muse models through the Meta Model API.
+
+## Features
+
+| Feature | How it works | Status |
+|---|---|---|
+| Sees the game | Pulls the frame at any second and reads it with Muse Spark vision | Live |
+| Hears you | Push-to-talk through Muse Voice Transcribe, game vocabulary biased | Live |
+| Talks back | Short spoken replies in a teammate's voice | Live |
+| Acts through tools | Coach decides when to look, clip, remember or call out; real function calls on the Responses API | Live |
+| Finds and cuts highlights | Scene changes and loud moments ranked into clips | Live |
+| Remembers the lesson | Match memory that persists across matches | Live |
+| Moment timeline | Detected moments on a clickable timeline | Live |
+| Live mode | Screen share so Coach watches the match as it happens | On the way |
+| Playbook for studios | Rules, controls and goals that Coach teaches new players while they play | On the way |
+| Highlight reel | Clips stitched into a reel with poster frames from Muse Image | On the way |
 
 ## What was built during the hackathon
 
@@ -37,7 +55,7 @@ python -m muse_replay coach "they're flanking left" --speak          # Coach rep
 python -m muse_replay play "clip the best moment" --video match.mp4  # Coach acts through tools
 python scripts/live_check.py                                       # live smoke test (uses credits)
 
-# Web app (Windows: double-click scripts\run_coach.cmd)
+# Web app
 pip install -e ".[web]"
 uvicorn web.app:app --reload          # then open http://127.0.0.1:8000
 pytest
