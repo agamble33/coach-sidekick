@@ -162,6 +162,19 @@
   .note{font-size:13.5px;padding:8px 10px;border-radius:10px;background:var(--surface)}
   .note b{display:block;font-size:12px;color:var(--text-2);font-weight:500;margin-bottom:2px}
   .stack{display:flex;flex-direction:column;gap:20px}
+  .rate{display:flex;gap:4px;margin-top:6px;align-items:center}
+  .rate button{border:0;background:transparent;color:var(--text-3);cursor:pointer;width:26px;height:26px;border-radius:50%;display:grid;place-items:center}
+  .rate button:hover{background:var(--surface);color:var(--text)}
+  .rate button.on{color:var(--blue-deep);background:var(--blue-tint)} .rate button.on.down{color:var(--red);background:rgba(255,107,107,.14)}
+  .rate svg{width:14px;height:14px}
+  .rate input{display:none;flex:1;border:.8px solid var(--border);border-radius:9999px;background:var(--surface);padding:4px 10px;font-size:12.5px;color:var(--text);outline:0;min-width:120px}
+  .rate input.show{display:block}
+  .rate .thanks{font-size:12px;color:var(--green)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+  .stat{background:var(--surface);border:.8px solid var(--border);border-radius:var(--r-md);padding:12px 14px}
+  .stat b{display:block;font-size:22px;font-weight:600;letter-spacing:-.01em}
+  .stat span{font-size:12.5px;color:var(--text-2)}
+  @media (max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}}
   .pb{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
   .pb input,.pb textarea{width:100%;border:.8px solid var(--border);border-radius:12px;background:var(--surface);padding:10px 12px;outline:0;resize:vertical;font-size:14px;color:var(--text);min-height:72px}
   .pb input{min-height:0}
@@ -219,7 +232,7 @@
     </div>
 
     <div class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>9 live · 1 on the way</span></div>
+      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>10 live · 1 on the way</span></div>
       <p class="sub">Every live feature runs on Meta models through the Model API.</p>
       <div class="feats">
         <div class="feat"><div class="fi">
@@ -249,6 +262,9 @@
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
           <b>Playbook for studios</b><span>Give Coach your game's rules, controls and goals. It teaches new players while they play. No tutorial level required.</span><em class="live">Live</em></div>
+        <div class="feat"><div class="fi">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+          <b>Learns from you</b><span>Rate any callout. Good ones become examples Coach follows, corrections become ones it avoids, and the set exports for Muse training.</span><em class="live">Live</em></div>
         <div class="feat soon"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
           <b>Highlight reel</b><span>Clips stitched into a shareable reel with poster frames from Muse Image.</span><em>On the way</em></div>
@@ -299,6 +315,21 @@
       </div>
     </div>
 
+    <div class="card" id="dataCard">
+      <div class="row" style="justify-content:space-between;margin-bottom:4px">
+        <h2>Gameplay data</h2>
+        <div class="row"><button id="exportBtn" class="btn ghost">Export training set</button></div>
+      </div>
+      <p class="sub">Every callout and reply is a record with the frame behind it. Rate them with the thumbs in the chat. Good ones become examples Coach follows; corrections become examples it avoids. The export is chat-tuning JSONL for Muse open-weight training.</p>
+      <div class="stats">
+        <div class="stat"><b id="st_records">0</b><span>records</span></div>
+        <div class="stat"><b id="st_labeled">0</b><span>rated</span></div>
+        <div class="stat"><b id="st_up">0</b><span>thumbs up</span></div>
+        <div class="stat"><b id="st_frames">0</b><span>frames saved</span></div>
+      </div>
+      <p id="exportMsg" class="sub" style="margin:10px 0 0"></p>
+    </div>
+
     <div class="card">
       <h2>Match memory</h2>
       <p class="sub">Notes Coach saved with <code>remember</code>. They persist across matches.</p>
@@ -346,6 +377,21 @@
   const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
   const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
   function add(cls, html){ const d=document.createElement('div'); d.className=cls; d.innerHTML=html; $('feed').appendChild(d); $('feed').scrollTop=$('feed').scrollHeight; return d; }
+  const UP='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>';
+  const DOWN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>';
+  function rater(rid){
+    if(!rid) return null;
+    const d=document.createElement('div'); d.className='rate';
+    d.innerHTML=`<button class="up" title="Good call">${UP}</button><button class="down" title="Wrong, tell Coach why">${DOWN}</button><input placeholder="What should Coach have said?" maxlength="300">`;
+    const up=d.querySelector('.up'), down=d.querySelector('.down'), inp=d.querySelector('input');
+    async function send(label, correction){ const r=await fetch(`/api/annotations/${rid}/label`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,correction:correction||''})}); if(r.ok){ const j=await r.json(); showStats(j.stats); } }
+    up.onclick=()=>{ up.classList.add('on'); down.classList.remove('on'); inp.classList.remove('show'); send('up'); };
+    down.onclick=()=>{ down.classList.add('on','down'); up.classList.remove('on'); inp.classList.add('show'); inp.focus(); send('down'); };
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); send('down', inp.value.trim()); inp.classList.remove('show'); const t=document.createElement('span'); t.className='thanks'; t.textContent='Noted. Coach will avoid that.'; d.appendChild(t); } });
+    return d;
+  }
+  function showStats(st){ if(!st) return; $('st_records').textContent=st.records; $('st_labeled').textContent=st.labeled; $('st_up').textContent=st.up; $('st_frames').textContent=st.frames; }
+  async function loadStats(){ try{ showStats(await (await fetch('/api/annotations/stats')).json()); }catch(e){} }
   function setStatus(t, live){ $('cstatus').textContent=t; $('avatar').classList.toggle('live', !!live); }
   function speak(text){
     if(!$('voice').checked || !('speechSynthesis' in window) || !text) return;
@@ -419,9 +465,10 @@
             if(watch && data.name==='look_now'){ step=null; continue; }
             step=add('step',`<div class="t"><span class="spin"></span>Coach is using <span class="k">${esc(data.name)}</span></div><div class="a">${esc(data.arguments||'')}</div>`); }
           else if(ev==='tool_result' && step){ step.querySelector('.spin').outerHTML='<span class="ok">✓</span>'; const o=document.createElement('div'); o.className='o'; o.textContent=data.output; step.appendChild(o);
-            if(data.name==='cut_clip') refreshMatch(); if(data.name==='remember') loadMemory(); if(data.name==='callout'){ const m=/\): (.*)$/s.exec(data.output); if(m) speak(m[1]); } }
+            if(data.name==='cut_clip') refreshMatch(); if(data.name==='remember') loadMemory();
+            if(data.name==='callout'){ const m=/\): (.*)$/s.exec(data.output); if(m){ speak(m[1]); const b=add('msg from-coach', esc(m[1])); const rt=rater(data.record_id); if(rt) b.appendChild(rt); loadStats(); } } }
           else if(ev==='done'){ const quiet=watch && /^quiet\.?$/i.test((data.text||'').trim());
-            if(!quiet){ add('msg from-coach', esc(data.text||'(no reply)')); speak(data.text); }
+            if(!quiet){ const b=add('msg from-coach', esc(data.text||'(no reply)')); const rt=rater(data.record_id); if(rt) b.appendChild(rt); speak(data.text); loadStats(); }
             $('usage').textContent=`${data.rounds} round${data.rounds===1?'':'s'} · ${data.input_tokens+data.output_tokens} tokens`; }
           else if(ev==='error'){ add('msg err', esc(data.message)); }
         } }
@@ -515,6 +562,8 @@
   $('teach').addEventListener('change',e=>{ if(e.target.checked) add('msg from-coach','New player mode is on. I will explain controls and goals as they come up.'); });
   loadPlaybook();
 
+  $('exportBtn').onclick=async()=>{ const r=await fetch('/api/annotations/export',{method:'POST'}); const j=await r.json(); $('exportMsg').innerHTML = j.examples ? `${j.examples} training example${j.examples===1?'':'s'} ready. <a href="/api/annotations/export">Download coach-training.jsonl</a>` : 'No rated records yet. Rate a few callouts first.'; };
+  loadStats();
   loadMemory();
   if('speechSynthesis' in window) speechSynthesis.getVoices();
 })();

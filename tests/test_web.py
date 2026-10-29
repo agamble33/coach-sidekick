@@ -19,6 +19,8 @@ def client(tmp_path, monkeypatch):
     webapp.app.state.memory = MatchMemory(tmp_path / "data" / "memory.json")
     from muse_replay.playbook import PlaybookStore
     webapp.app.state.playbooks = PlaybookStore(tmp_path / "data" / "playbook.json")
+    from muse_replay.annotations import AnnotationStore
+    webapp.app.state.annotations = AnnotationStore(tmp_path / "data" / "annotations" / "records.jsonl")
     webapp._agents.clear(); webapp._live.clear()
 
     class FakeMeta:                       # stands in for MetaClient; agent is faked below
@@ -242,3 +244,41 @@ def test_playbook_routes_and_teach_turn(client, monkeypatch):
     # delete, then teach mode is refused
     assert c.delete("/api/playbook").json()["ok"] is True
     assert c.post("/api/turn", json={"live_id": lid, "watch": True, "teach": True}).status_code == 400
+
+
+
+def test_annotation_routes(client, monkeypatch):
+    c, webapp = client
+    st = webapp.app.state.annotations
+    r = st.add("g", "callout", "Rotate back", frame_jpeg=JPEG)
+    assert c.get("/api/annotations/stats").json()["records"] == 1
+    bad = c.post(f"/api/annotations/{r.id}/label", json={"label": "meh"})
+    assert bad.status_code == 422
+    assert c.post("/api/annotations/nope/label", json={"label": "up"}).status_code == 404
+    ok = c.post(f"/api/annotations/{r.id}/label", json={"label": "down", "correction": "we had cover"}).json()
+    assert ok["label"] == "down" and ok["stats"]["down"] == 1
+    assert c.get("/api/annotations/recent").json()["records"][0]["correction"] == "we had cover"
+    fr = c.get(f"/api/annotations/frame/{r.frame}")
+    assert fr.status_code == 200 and fr.headers["content-type"] == "image/jpeg"
+    assert c.get("/api/annotations/frame/..%2Frecords.jsonl").status_code in (400, 404)
+    assert c.get("/api/annotations/export").status_code == 404
+    assert c.post("/api/annotations/export").json()["examples"] == 1
+    dl = c.get("/api/annotations/export")
+    assert dl.status_code == 200 and b'"we had cover"' in dl.content
+
+
+def test_turn_done_event_carries_record_id(client, monkeypatch):
+    c, webapp = client
+
+    class FakeAgent:
+        def __init__(self, client, session, **kw):
+            self.session, self.on_event = session, (lambda k, d: None)
+            assert session.annotations is webapp.app.state.annotations
+        def turn(self, text):
+            rid = self.session.record("reply", "Hold B.", text)
+            return TurnResult(text="Hold B.", record_id=rid)
+
+    monkeypatch.setattr(webapp, "CoachAgent", FakeAgent)
+    r = c.post("/api/turn", json={"text": "where?"})
+    done = [json.loads(b.split("\n")[1][6:]) for b in r.text.strip().split("\n\n") if b.startswith("event: done")][0]
+    assert done["record_id"] and webapp.app.state.annotations.get(done["record_id"]).player_text == "where?"

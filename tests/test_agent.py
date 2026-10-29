@@ -129,3 +129,40 @@ def test_cli_play(monkeypatch, tmp_path, capsys):
     assert cli.main(["play", "go", "--work", str(tmp_path), "--match", "m7"]) == 0
     out = capsys.readouterr().out
     assert "[tool] callout" in out and out.strip().endswith("On it.")
+
+
+def test_agent_records_callouts_and_replies_with_frames(tmp_path):
+    from muse_replay.annotations import AnnotationStore
+    from muse_replay.tools import LiveFeed
+    JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 32 + b"\xff\xd9"
+    t = Scripted([
+        {"id": "r1", "output": [{"type": "function_call", "name": "callout", "arguments": '{"text": "Rotate back"}', "call_id": "a"}], "usage": {}},
+        msg("Rotating. Watch the far post.", rid="r2"),
+    ])
+    agent = make_agent(tmp_path, t)
+    agent.session.annotations = AnnotationStore(tmp_path / "ann.jsonl")
+    agent.session.live = LiveFeed(); agent.session.live.push(JPEG)
+    agent.session.last_observation = "ball in our half, goal empty"
+    events = []; agent.on_event = lambda k, d: events.append((k, d))
+    r = agent.turn("what now?")
+    st = agent.session.annotations
+    recs = st.recent()
+    assert [x.kind for x in recs] == ["callout", "reply"]
+    assert recs[0].text == "Rotate back" and recs[0].observation == "ball in our half, goal empty" and recs[0].frame.endswith(".jpg")
+    assert recs[1].player_text == "what now?" and recs[1].mode == "live"
+    tool_result = [d for k, d in events if k == "tool_result"][0]
+    assert tool_result["record_id"] == recs[0].id and r.record_id == recs[1].id
+    # rating feeds the next request's instructions
+    st.label(recs[0].id, "up")
+    t2 = Scripted([msg("ok", rid="r3")]); agent.client = MetaClient(load_settings(ENV), t2)
+    agent.turn("again")
+    assert 'Good callout: "Rotate back"' in t2.payloads[0]["instructions"]
+
+
+def test_watch_tick_quiet_is_not_recorded(tmp_path):
+    from muse_replay.agent import WATCH_PROMPT
+    from muse_replay.annotations import AnnotationStore
+    agent = make_agent(tmp_path, Scripted([msg("quiet", rid="r1")]))
+    agent.session.annotations = AnnotationStore(tmp_path / "ann.jsonl")
+    r = agent.turn(WATCH_PROMPT)
+    assert r.record_id == "" and agent.session.annotations.stats()["records"] == 0

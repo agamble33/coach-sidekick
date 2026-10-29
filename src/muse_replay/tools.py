@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from .clips import cut_clip, detect_audio_events, detect_scene_events
 from .ingest import IngestError, VideoInfo, probe, sample_frames
+from .annotations import AnnotationStore
 from .memory import MatchMemory
 from .playbook import Playbook
 from .meta_api import MetaAPIError, MetaClient
@@ -66,7 +67,30 @@ class Session:
     live: LiveFeed | None = None
     playbook: "Playbook | None" = None
     teach: bool = False
+    annotations: AnnotationStore | None = None
+    last_observation: str = ""
+    last_record_id: str = ""
     _info: VideoInfo | None = None
+
+    @property
+    def game(self) -> str:
+        return self.playbook.game if self.playbook else self.match
+
+    def record(self, kind: str, text: str, player_text: str = "") -> str:
+        """Write an annotation record if a store is attached; returns its id or ''."""
+        if self.annotations is None or not text.strip():
+            return ""
+        frame = None
+        if self.live is not None and self.live.latest() is not None:
+            frame = self.live.latest()[1]
+        mode = "teach" if self.teach else ("live" if self.live is not None else "match")
+        try:
+            r = self.annotations.add(self.game, kind, text, player_text=player_text, observation=self.last_observation,
+                                     playbook=self.playbook.game if self.playbook else "", mode=mode, frame_jpeg=frame)
+        except ValueError:
+            return ""
+        self.last_record_id = r.id
+        return r.id
 
     def info(self) -> VideoInfo:
         if not self.video:
@@ -120,7 +144,8 @@ def t_look(s: Session, args: dict) -> str:
         data = Path(frames[0].path).read_bytes()
     if s.client is None:
         return f"(no model client) frame at {t:.1f}s captured, {len(data)} bytes"
-    return _describe(s, data, question)
+    s.last_observation = _describe(s, data, question)
+    return s.last_observation
 
 
 def _describe(s: Session, jpeg: bytes, question: str) -> str:
@@ -152,7 +177,8 @@ def t_look_now(s: Session, args: dict) -> str:
     question = str(args.get("question") or "What is happening on the player's screen right now? Be specific and brief.")
     if s.client is None:
         return f"(no model client) live frame {age:.1f}s old, {len(jpeg)} bytes"
-    return f"[{age:.0f}s ago] " + _describe(s, jpeg, question)
+    s.last_observation = _describe(s, jpeg, question)
+    return f"[{age:.0f}s ago] " + s.last_observation
 
 
 def t_find_moments(s: Session, args: dict) -> str:
@@ -197,6 +223,7 @@ def t_callout(s: Session, args: dict) -> str:
     if not text:
         raise ValueError("nothing to say")
     s.spoken.append(text)
+    s.record("callout", text)
     backend = speak(text) if s.speak_out_loud else "muted"
     return f"said ({backend}): {text}"
 

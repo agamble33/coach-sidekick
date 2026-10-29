@@ -20,6 +20,7 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026) on Meta
 | Moment timeline | Detected moments on a clickable timeline | Live |
 | Live mode | Share your screen; a frame goes to Coach every 4 s and it calls out on its own when something matters | Live |
 | Playbook for studios | A studio saves the goal, controls, rules, tips and common mistakes; in New player mode Coach teaches one thing at a time as it comes up | Live |
+| Learns from you | Every callout and reply is a record with its frame; thumbs up/down and corrections feed back into Coach's instructions and export as chat-tuning JSONL for Muse open-weight training | Live |
 | Highlight reel | Clips stitched into a reel with poster frames from Muse Image | On the way |
 
 ## What was built during the hackathon
@@ -40,7 +41,8 @@ Each gate ships with tests and must pass before the next one starts.
 | 5 | Web app: match player, moment timeline, live tool-call feed, voice in/out, clips, memory | Done |
 | 6 | Live mode: screen share, look_now tool, auto callouts | Done |
 | 7 | Studio playbook and New player mode (teach ticks) | Done |
-| 8 | Highlight reel with Muse Image, hosted demo | Planned |
+| 8 | Gameplay data: annotation records, ratings, learned examples, training export | Done |
+| 9 | Highlight reel with Muse Image, hosted demo | Planned |
 
 ## Quick start
 
@@ -77,6 +79,10 @@ The agent runs on the Responses API with function tools. Coach can `look` at any
 
 - Meta Model API (Muse Spark and the other Muse models), via `META_API_KEY` and `META_BASE_URL`
 - Muse Spark Open (open weights) on Baseten, via `BASETEN_API_KEY`
+
+## Data
+
+Coach writes its data (matches, clips, memory, playbook, annotation records and frames, training exports) under `coach_data/`, which is git-ignored. The repo holds code only.
 
 ## License
 

@@ -39,6 +39,10 @@ def instructions_for(session: Session) -> str:
         text += "\n\n" + session.playbook.as_prompt()
         if session.teach:
             text += "\nThe player is NEW. Default to teaching: explain controls and goals as they come up, never assume they know."
+    if session.annotations is not None:
+        learned = session.annotations.learned_prompt(session.game)
+        if learned:
+            text += "\n\n" + learned
     return text
 
 
@@ -50,6 +54,7 @@ class TurnResult:
     response_id: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
+    record_id: str = ""
 
 
 def _split_output(resp: dict) -> tuple[list[dict], str]:
@@ -111,8 +116,10 @@ class CoachAgent:
             pending = []
             for call in calls:
                 self.on_event("tool_call", {"name": call.get("name"), "arguments": call.get("arguments")})
+                self.session.last_record_id = ""
                 output = run_tool(self.session, call.get("name", ""), call.get("arguments", "{}"))
-                self.on_event("tool_result", {"name": call.get("name"), "output": output[:400]})
+                self.on_event("tool_result", {"name": call.get("name"), "output": output[:400],
+                                              "record_id": self.session.last_record_id})
                 result.tool_calls.append({"name": call.get("name"), "arguments": call.get("arguments"),
                                           "output": output})
                 pending.append({"type": "function_call_output", "call_id": str(call.get("call_id", ""))[:64],
@@ -120,7 +127,10 @@ class CoachAgent:
         else:
             result.text = result.text or "Let me pause there. What do you want me to do next?"
         self.last_response_id = result.response_id
-        self.on_event("text", {"text": result.text})
+        is_tick = player_text in (WATCH_PROMPT, TEACH_PROMPT)
+        rid = "" if (is_tick or result.text.strip().lower() == "quiet") else self.session.record("reply", result.text, player_text)
+        result.record_id = rid
+        self.on_event("text", {"text": result.text, "record_id": rid})
         return result
 
     def reset(self) -> None:

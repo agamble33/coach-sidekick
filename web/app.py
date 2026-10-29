@@ -36,6 +36,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from muse_replay.agent import TEACH_PROMPT, WATCH_PROMPT, CoachAgent
+from muse_replay.annotations import AnnotationStore
 from muse_replay.clips import detect_audio_events, detect_scene_events
 from muse_replay.config import load_settings
 from muse_replay.health import health_report
@@ -68,6 +69,7 @@ app.state.client_factory = _client_factory
 app.state.transcribe = transcribe_file
 app.state.memory = MatchMemory(DATA / "memory.json")
 app.state.playbooks = PlaybookStore(DATA / "playbook.json")
+app.state.annotations = AnnotationStore(DATA / "annotations" / "records.jsonl")
 
 
 def _match_dir(mid: str) -> Path:
@@ -200,7 +202,8 @@ def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
             session = Session(work_dir=Path(meta["video"]).parent if meta else DATA / "scratch",
                               memory=app.state.memory,
                               match=meta["name"] if meta else ("live session" if live_id else "no match"),
-                              video=meta["video"] if meta else None, client=client, live=feed)
+                              video=meta["video"] if meta else None, client=client, live=feed,
+                              annotations=app.state.annotations)
             _agents[key] = CoachAgent(client, session)
         agent = _agents[key]
         agent.session.playbook = app.state.playbooks.load()      # always current
@@ -259,7 +262,8 @@ def turn(body: TurnIn):
         try:
             r = agent.turn(text)
             q.put(("done", {"text": r.text, "rounds": r.rounds, "input_tokens": r.input_tokens,
-                            "output_tokens": r.output_tokens, "spoken": agent.session.spoken[-3:]}))
+                            "output_tokens": r.output_tokens, "spoken": agent.session.spoken[-3:],
+                            "record_id": r.record_id}))
         except (MetaAPIError, ValueError) as exc:
             q.put(("error", {"message": str(exc)}))
         except Exception as exc:                       # never leave the stream empty
@@ -331,6 +335,55 @@ def put_playbook(body: PlaybookIn):
 def delete_playbook():
     app.state.playbooks.clear()
     return {"ok": True}
+
+
+class LabelIn(BaseModel):
+    label: str = Field(pattern="^(up|down)$")
+    correction: str = Field(default="", max_length=300)
+
+
+@app.post("/api/annotations/{rid}/label")
+def label_record(rid: str, body: LabelIn):
+    try:
+        r = app.state.annotations.label(rid, body.label, body.correction)
+    except KeyError:
+        raise HTTPException(404, "record not found")
+    return {"id": r.id, "label": r.label, "correction": r.correction, "stats": app.state.annotations.stats()}
+
+
+@app.get("/api/annotations/stats")
+def annotation_stats(game: str | None = None):
+    return app.state.annotations.stats(game)
+
+
+@app.get("/api/annotations/recent")
+def annotation_recent(limit: int = 30, game: str | None = None):
+    return {"records": [asdict(r) for r in app.state.annotations.recent(min(max(limit, 1), 200), game)]}
+
+
+@app.get("/api/annotations/frame/{name}")
+def annotation_frame(name: str):
+    if "/" in name or "\\" in name or ".." in name or not name.endswith(".jpg"):
+        raise HTTPException(400, "bad frame name")
+    p = app.state.annotations.frames_dir / name
+    if not p.is_file():
+        raise HTTPException(404, "frame not found")
+    return FileResponse(p, media_type="image/jpeg")
+
+
+@app.post("/api/annotations/export")
+def annotation_export(game: str | None = None, include_unlabeled: bool = False):
+    out = DATA / "annotations" / "training.jsonl"
+    n = app.state.annotations.export_training(out, game, include_unlabeled)
+    return {"examples": n, "file": out.name}
+
+
+@app.get("/api/annotations/export")
+def annotation_export_download():
+    out = DATA / "annotations" / "training.jsonl"
+    if not out.is_file():
+        raise HTTPException(404, "export first with POST /api/annotations/export")
+    return FileResponse(out, media_type="application/jsonl", filename="coach-training.jsonl")
 
 
 @app.get("/api/memory")
