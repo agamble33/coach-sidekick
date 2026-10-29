@@ -19,7 +19,7 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026) on Meta
 | Remembers the lesson | Match memory that persists across matches | Live |
 | Moment timeline | Detected moments on a clickable timeline | Live |
 | Live mode | Share your screen; a frame goes to Coach every 4 s and it calls out on its own when something matters | Live |
-| Playbook for studios | Rules, controls and goals that Coach teaches new players while they play | On the way |
+| Playbook for studios | A studio saves the goal, controls, rules, tips and common mistakes; in New player mode Coach teaches one thing at a time as it comes up | Live |
 | Highlight reel | Clips stitched into a reel with poster frames from Muse Image | On the way |
 
 ## What was built during the hackathon
@@ -39,7 +39,8 @@ Each gate ships with tests and must pass before the next one starts.
 | 4 | Agent: Coach as a teammate that acts through tool calls (look, find_moments, cut_clip, remember, recall, callout) | Done |
 | 5 | Web app: match player, moment timeline, live tool-call feed, voice in/out, clips, memory | Done |
 | 6 | Live mode: screen share, look_now tool, auto callouts | Done |
-| 7 | Playbook for studios, highlight reel with Muse Image, hosted demo | Planned |
+| 7 | Studio playbook and New player mode (teach ticks) | Done |
+| 8 | Highlight reel with Muse Image, hosted demo | Planned |
 
 ## Quick start
 

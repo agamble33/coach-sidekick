@@ -162,6 +162,13 @@
   .note{font-size:13.5px;padding:8px 10px;border-radius:10px;background:var(--surface)}
   .note b{display:block;font-size:12px;color:var(--text-2);font-weight:500;margin-bottom:2px}
   .stack{display:flex;flex-direction:column;gap:20px}
+  .pb{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .pb input,.pb textarea{width:100%;border:.8px solid var(--border);border-radius:12px;background:var(--surface);padding:10px 12px;outline:0;resize:vertical;font-size:14px;color:var(--text);min-height:72px}
+  .pb input{min-height:0}
+  .pb input{grid-column:1/-1}
+  .pb input:focus,.pb textarea:focus{border-color:var(--blue)}
+  .pb ::placeholder{color:var(--text-3)}
+  @media (max-width:700px){.pb{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -212,7 +219,7 @@
     </div>
 
     <div class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>8 live · 2 on the way</span></div>
+      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>9 live · 1 on the way</span></div>
       <p class="sub">Every live feature runs on Meta models through the Model API.</p>
       <div class="feats">
         <div class="feat"><div class="fi">
@@ -239,9 +246,9 @@
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
           <b>Live mode</b><span>Share your screen and Coach watches the match as it happens, calling out on its own when something matters.</span><em class="live">Live</em></div>
-        <div class="feat soon"><div class="fi">
+        <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
-          <b>Playbook for studios</b><span>Give Coach your game's rules, controls and goals. It teaches new players while they play. No tutorial level required.</span><em>On the way</em></div>
+          <b>Playbook for studios</b><span>Give Coach your game's rules, controls and goals. It teaches new players while they play. No tutorial level required.</span><em class="live">Live</em></div>
         <div class="feat soon"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
           <b>Highlight reel</b><span>Clips stitched into a shareable reel with poster frames from Muse Image.</span><em>On the way</em></div>
@@ -268,6 +275,30 @@
       <div id="noclips" class="empty">No clips yet. Ask Coach to clip the best moment.</div>
     </div>
 
+    <div class="card" id="pbCard">
+      <div class="row" style="justify-content:space-between;margin-bottom:4px">
+        <h2>Studio playbook</h2>
+        <span id="pbStatus" class="chip"><span class="dot"></span>No playbook</span>
+      </div>
+      <p class="sub">What a studio gives Coach so it can teach new players inside the game: the goal, the controls, the rules, the usual mistakes. Coach teaches one thing at a time, when it matters.</p>
+      <div class="pb">
+        <input id="pb_game" placeholder="Game name" maxlength="80">
+        <textarea id="pb_goal" rows="3" placeholder="Goal. What does winning look like?"></textarea>
+        <textarea id="pb_controls" rows="3" placeholder="Controls. Keys, buttons, gestures."></textarea>
+        <textarea id="pb_rules" rows="3" placeholder="Rules. What is allowed, what ends a round."></textarea>
+        <textarea id="pb_tips" rows="3" placeholder="Tips. What good players do early."></textarea>
+        <textarea id="pb_mistakes" rows="3" placeholder="Common mistakes new players make."></textarea>
+      </div>
+      <div class="row" style="margin-top:12px;justify-content:space-between">
+        <label class="toggle" title="Coach assumes the player is new and teaches from the playbook"><input id="teach" type="checkbox"> New player mode</label>
+        <div class="row">
+          <button id="pbSample" class="btn ghost">Fill a sample</button>
+          <button id="pbClear" class="btn ghost">Clear</button>
+          <button id="pbSave" class="btn">Save playbook</button>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <h2>Match memory</h2>
       <p class="sub">Notes Coach saved with <code>remember</code>. They persist across matches.</p>
@@ -285,7 +316,7 @@
       <div class="msg from-coach">Hey, I'm Coach. Load a match and tell me what you want: a read on a moment, the best clip, or what we learned last time.</div>
     </div>
     <div class="tips" id="tips">
-      <button class="tip" data-t="What's happening at 15 seconds?" data-mode="match">What's happening at 15 seconds?</button><button class="tip" data-t="What do you see right now?" data-mode="live" hidden>What do you see right now?</button><button class="tip" data-t="What should I do next?" data-mode="live" hidden>What should I do next?</button>
+      <button class="tip" data-t="What's happening at 15 seconds?" data-mode="match">What's happening at 15 seconds?</button><button class="tip" data-t="What do you see right now?" data-mode="live" hidden>What do you see right now?</button><button class="tip" data-t="What should I do next?" data-mode="live" hidden>What should I do next?</button><button class="tip" data-t="I'm new. What are the controls and what am I trying to do?" data-mode="live" hidden>I'm new, teach me</button>
       <button class="tip" data-t="Find the biggest moment and clip it.">Clip the biggest moment</button>
       <button class="tip" data-t="Remember: we lose rounds when we both push mid.">Remember a lesson</button>
       <button class="tip" data-t="What did we learn last match?">What did we learn?</button>
@@ -378,7 +409,7 @@
     if(!watch) add('msg me', esc(text));
     let step=null;
     try{
-      const r=await fetch('/api/turn',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({match_id:state.match?state.match.id:null,live_id:state.live,text:watch?null:text,watch})});
+      const r=await fetch('/api/turn',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({match_id:state.match?state.match.id:null,live_id:state.live,text:watch?null:text,watch,teach:$('teach').checked})});
       if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.detail||('HTTP '+r.status)); }
       const reader=r.body.getReader(); const dec=new TextDecoder(); let buf='';
       while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
@@ -470,6 +501,19 @@
   function applyTheme(t){ if(t==='light') root.setAttribute('data-theme','light'); else root.removeAttribute('data-theme'); $('theme').textContent=t==='light'?'Horizon':'Light'; try{localStorage.setItem('coach-theme',t);}catch(e){} }
   try{ applyTheme(localStorage.getItem('coach-theme')||'horizon'); }catch(e){ applyTheme('horizon'); }
   $('theme').onclick=()=>applyTheme(root.getAttribute('data-theme')==='light'?'horizon':'light');
+
+  // ---------- studio playbook ----------
+  const PB=['game','goal','controls','rules','tips','mistakes'];
+  function pbStatus(pb){ const c=$('pbStatus'); c.className='chip '+(pb?'ok':''); c.innerHTML=`<span class="dot"></span>${pb?esc(pb.game)+' loaded':'No playbook'}`; $('teach').disabled=!pb; if(!pb) $('teach').checked=false; }
+  async function loadPlaybook(){ try{ const d=await (await fetch('/api/playbook')).json(); const pb=d.playbook; PB.forEach(k=>{ $('pb_'+k).value=pb?(pb[k]||''):''; }); pbStatus(pb); }catch(e){} }
+  $('pbSave').onclick=async()=>{ const body={}; PB.forEach(k=>body[k]=$('pb_'+k).value);
+    const r=await fetch('/api/playbook',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const j=await r.json();
+    if(!r.ok){ add('msg err','Playbook not saved: '+(j.detail&&j.detail[0]&&j.detail[0].msg||j.detail||r.status)); return; }
+    pbStatus(j.playbook); add('msg from-coach',`Got the ${esc(j.playbook.game)} playbook. Turn on New player mode and I'll teach as we go.`); };
+  $('pbClear').onclick=async()=>{ await fetch('/api/playbook',{method:'DELETE'}); PB.forEach(k=>$('pb_'+k).value=''); pbStatus(null); };
+  $('pbSample').onclick=()=>{ const v={game:'Rocket Rally',goal:'Score more goals than the other team before the 5 minute clock runs out.',controls:'A and D steer. Space is boost. Shift drifts. Hold Space while airborne to fly.',rules:'Three players a side. A goal resets both teams to their halves. The ball never leaves play.',tips:'Rotate back after every shot. Save boost for the chase, not the kickoff. Watch the mini map for an empty goal.',mistakes:'Chasing the ball with the whole team. Boosting on the kickoff and arriving empty. Facing the ball instead of the goal.'}; PB.forEach(k=>$('pb_'+k).value=v[k]); };
+  $('teach').addEventListener('change',e=>{ if(e.target.checked) add('msg from-coach','New player mode is on. I will explain controls and goals as they come up.'); });
+  loadPlaybook();
 
   loadMemory();
   if('speechSynthesis' in window) speechSynthesis.getVoices();

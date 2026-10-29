@@ -17,6 +17,9 @@ def client(tmp_path, monkeypatch):
     import web.app as webapp
     importlib.reload(webapp)
     webapp.app.state.memory = MatchMemory(tmp_path / "data" / "memory.json")
+    from muse_replay.playbook import PlaybookStore
+    webapp.app.state.playbooks = PlaybookStore(tmp_path / "data" / "playbook.json")
+    webapp._agents.clear(); webapp._live.clear()
 
     class FakeMeta:                       # stands in for MetaClient; agent is faked below
         def post_json(self, path, payload):
@@ -206,3 +209,36 @@ def test_watch_turn_uses_live_feed(client, monkeypatch):
     assert seen["text"] == "what do you see?"
     assert c.post("/api/turn", json={"watch": True}).status_code == 400
     assert c.post("/api/turn", json={"live_id": "nope", "text": "hi"}).status_code == 404
+
+
+
+def test_playbook_routes_and_teach_turn(client, monkeypatch):
+    c, webapp = client
+    from muse_replay.agent import TEACH_PROMPT
+    assert c.get("/api/playbook").json() == {"playbook": None}
+    assert c.put("/api/playbook", json={"game": "", "goal": "x"}).status_code == 422
+    assert c.put("/api/playbook", json={"game": "Rocket Rally"}).status_code == 400
+    r = c.put("/api/playbook", json={"game": "Rocket Rally", "controls": "Space boost", "goal": "score"})
+    assert r.status_code == 200 and r.json()["playbook"]["controls"] == "Space boost"
+    assert c.get("/api/playbook").json()["playbook"]["game"] == "Rocket Rally"
+
+    seen = {}
+
+    class FakeAgent:
+        def __init__(self, client, session, **kw):
+            self.session, self.on_event = session, (lambda k, d: None)
+        def turn(self, text):
+            seen.update(text=text, teach=self.session.teach, pb=self.session.playbook)
+            return TurnResult(text="quiet")
+
+    monkeypatch.setattr(webapp, "CoachAgent", FakeAgent)
+    lid = c.post("/api/live/start").json()["live_id"]
+    c.post(f"/api/live/{lid}/frame", files={"file": ("f.jpg", JPEG, "image/jpeg")})
+    assert c.post("/api/turn", json={"live_id": lid, "watch": True, "teach": True}).status_code == 200
+    assert seen["text"] == TEACH_PROMPT and seen["teach"] is True and seen["pb"].game == "Rocket Rally"
+    # a plain question in teach mode still carries the playbook
+    c.post("/api/turn", json={"live_id": lid, "text": "how do I boost?", "teach": True})
+    assert seen["text"] == "how do I boost?" and seen["pb"] is not None
+    # delete, then teach mode is refused
+    assert c.delete("/api/playbook").json()["ok"] is True
+    assert c.post("/api/turn", json={"live_id": lid, "watch": True, "teach": True}).status_code == 400

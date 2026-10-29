@@ -35,7 +35,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from muse_replay.agent import WATCH_PROMPT, CoachAgent
+from muse_replay.agent import TEACH_PROMPT, WATCH_PROMPT, CoachAgent
 from muse_replay.clips import detect_audio_events, detect_scene_events
 from muse_replay.config import load_settings
 from muse_replay.health import health_report
@@ -43,6 +43,7 @@ from muse_replay.ingest import VIDEO_SUFFIXES, IngestError, probe
 from muse_replay.memory import MatchMemory
 from muse_replay.meta_api import MetaAPIError, MetaClient
 from muse_replay.moments import pick_clips
+from muse_replay.playbook import PlaybookError, PlaybookStore
 from muse_replay.tools import LiveFeed, Session
 from muse_replay.voice import VoiceError, to_wav_24k, transcribe_file
 
@@ -66,6 +67,7 @@ def _client_factory() -> MetaClient:
 app.state.client_factory = _client_factory
 app.state.transcribe = transcribe_file
 app.state.memory = MatchMemory(DATA / "memory.json")
+app.state.playbooks = PlaybookStore(DATA / "playbook.json")
 
 
 def _match_dir(mid: str) -> Path:
@@ -178,6 +180,7 @@ class TurnIn(BaseModel):
     live_id: str | None = None
     text: str | None = Field(default=None, max_length=4000)
     watch: bool = False
+    teach: bool = False
 
 
 def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
@@ -199,7 +202,9 @@ def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
                               match=meta["name"] if meta else ("live session" if live_id else "no match"),
                               video=meta["video"] if meta else None, client=client, live=feed)
             _agents[key] = CoachAgent(client, session)
-        return _agents[key]
+        agent = _agents[key]
+        agent.session.playbook = app.state.playbooks.load()      # always current
+        return agent
 
 
 @app.post("/api/live/start")
@@ -240,10 +245,13 @@ def turn(body: TurnIn):
     if body.watch:
         if not body.live_id:
             raise HTTPException(400, "watch needs a live_id")
-        text = WATCH_PROMPT
+        text = TEACH_PROMPT if body.teach else WATCH_PROMPT
     if not text:
         raise HTTPException(422, "text is required")
     agent = _agent_for(body.match_id, body.live_id)
+    agent.session.teach = body.teach
+    if body.teach and agent.session.playbook is None:
+        raise HTTPException(400, "teach mode needs a playbook; save one first")
     q: queue.Queue = queue.Queue()
     agent.on_event = lambda kind, data: q.put((kind, data))
 
@@ -293,6 +301,36 @@ async def transcribe(file: UploadFile = File(...)):
         except (VoiceError, MetaAPIError) as exc:
             raise HTTPException(400, str(exc))
     return {"transcript": t.text, "audio_ms": t.audio_ms}
+
+
+class PlaybookIn(BaseModel):
+    game: str = Field(min_length=1, max_length=80)
+    goal: str = ""
+    controls: str = ""
+    rules: str = ""
+    tips: str = ""
+    mistakes: str = ""
+
+
+@app.get("/api/playbook")
+def get_playbook():
+    pb = app.state.playbooks.load()
+    return {"playbook": asdict(pb) if pb else None}
+
+
+@app.put("/api/playbook")
+def put_playbook(body: PlaybookIn):
+    try:
+        pb = app.state.playbooks.save(body.model_dump())
+    except PlaybookError as exc:
+        raise HTTPException(400, str(exc))
+    return {"playbook": asdict(pb), "chars": pb.total_chars()}
+
+
+@app.delete("/api/playbook")
+def delete_playbook():
+    app.state.playbooks.clear()
+    return {"ok": True}
 
 
 @app.get("/api/memory")

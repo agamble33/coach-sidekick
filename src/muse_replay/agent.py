@@ -25,6 +25,21 @@ WATCH_PROMPT = (
     "an objective), use callout with one short line a teammate would say. If nothing matters, do not call "
     "out. Then reply with exactly: quiet"
 )
+TEACH_PROMPT = (
+    "Teach tick. The player is new to this game. Use look_now once. Compare what you see with the PLAYBOOK. "
+    "If they are missing a control, a rule or the current goal, or about to make a listed mistake, use callout "
+    "with one short friendly line that teaches exactly that one thing. If they are doing fine, do not call out. "
+    "Then reply with exactly: quiet"
+)
+
+
+def instructions_for(session: Session) -> str:
+    text = AGENT_SYSTEM
+    if session.playbook is not None:
+        text += "\n\n" + session.playbook.as_prompt()
+        if session.teach:
+            text += "\nThe player is NEW. Default to teaching: explain controls and goals as they come up, never assume they know."
+    return text
 
 
 @dataclass
@@ -60,7 +75,7 @@ class CoachAgent:
 
     def _request(self, input_items: list, previous: str | None) -> dict:
         payload = {
-            "model": self.model, "instructions": AGENT_SYSTEM, "input": input_items,
+            "model": self.model, "instructions": instructions_for(self.session), "input": input_items,
             "tools": self.tools, "tool_choice": "auto", "parallel_tool_calls": True,
             "reasoning": {"effort": self.effort}, "stream": False,
         }

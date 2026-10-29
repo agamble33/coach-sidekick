@@ -18,6 +18,7 @@ from typing import Any, Callable
 from .clips import cut_clip, detect_audio_events, detect_scene_events
 from .ingest import IngestError, VideoInfo, probe, sample_frames
 from .memory import MatchMemory
+from .playbook import Playbook
 from .meta_api import MetaAPIError, MetaClient
 from .moments import MomentError, pick_clips
 from .voice import speak
@@ -63,6 +64,8 @@ class Session:
     speak_out_loud: bool = False
     spoken: list[str] = field(default_factory=list)
     live: LiveFeed | None = None
+    playbook: "Playbook | None" = None
+    teach: bool = False
     _info: VideoInfo | None = None
 
     def info(self) -> VideoInfo:
