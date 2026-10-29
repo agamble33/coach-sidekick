@@ -46,9 +46,10 @@ def _split_output(resp: dict) -> tuple[list[dict], str]:
 
 class CoachAgent:
     def __init__(self, client: MetaClient, session: Session, model: str = DEFAULT_MODEL,
-                 effort: str = "low", max_rounds: int = MAX_ROUNDS):
+                 effort: str = "low", max_rounds: int = MAX_ROUNDS, on_event=None):
         self.client, self.session, self.model, self.effort = client, session, model, effort
         self.max_rounds = max_rounds
+        self.on_event = on_event or (lambda kind, data: None)   # ("tool_call"|"tool_result"|"text", dict)
         self.last_response_id: str | None = None
         self.tools = tool_specs()
 
@@ -89,7 +90,9 @@ class CoachAgent:
                 break
             pending = []
             for call in calls:
+                self.on_event("tool_call", {"name": call.get("name"), "arguments": call.get("arguments")})
                 output = run_tool(self.session, call.get("name", ""), call.get("arguments", "{}"))
+                self.on_event("tool_result", {"name": call.get("name"), "output": output[:400]})
                 result.tool_calls.append({"name": call.get("name"), "arguments": call.get("arguments"),
                                           "output": output})
                 pending.append({"type": "function_call_output", "call_id": str(call.get("call_id", ""))[:64],
@@ -97,6 +100,7 @@ class CoachAgent:
         else:
             result.text = result.text or "Let me pause there. What do you want me to do next?"
         self.last_response_id = result.response_id
+        self.on_event("text", {"text": result.text})
         return result
 
     def reset(self) -> None:

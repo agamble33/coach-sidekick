@@ -11,3 +11,5 @@ media/
 *.mkv
 scripts/windows_check.log
 media/
+coach_data/
+coach_work/

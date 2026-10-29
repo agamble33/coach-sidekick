@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coach · Muse Replay</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230064E0'/%3E%3Ccircle cx='16' cy='16' r='6' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --font:"Optimistic AI VF",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    --mono:"SF Mono",Monaco,Consolas,monospace;
+    --text:#111112; --text-2:#666A72; --text-3:#9FA4AB;
+    --border:#E0E2E4; --surface:#F3F4F5; --surface-2:#FAFAFA; --white:#fff;
+    --blue:#0064E0; --blue-hover:#0457CB; --blue-tint:rgba(5,54,89,.10); --blue-deep:#042F97;
+    --ink:#0A1317; --green:#1C8E5A; --amber:#B7791F; --red:#C62828;
+    --r-sm:8px; --r-md:16px; --r-lg:24px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--white);color:var(--text);font:15px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+  button,input,textarea{font:inherit;color:inherit}
+  a{color:var(--blue);text-decoration:none}
+
+  /* top bar */
+  .top{height:60px;display:flex;align-items:center;gap:14px;padding:0 24px;border-bottom:.8px solid var(--border);background:rgba(255,255,255,.9);backdrop-filter:blur(10px);position:sticky;top:0;z-index:5}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px;letter-spacing:-.01em}
+  .brand .mark{width:28px;height:28px;border-radius:8px;background:var(--blue);display:grid;place-items:center}
+  .brand .mark i{width:12px;height:12px;border-radius:50%;background:#fff;display:block}
+  .brand small{color:var(--text-2);font-weight:500;font-size:13px;margin-left:2px}
+  .top .spacer{flex:1}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:9999px;background:var(--surface);color:var(--text-2);font-size:13px;font-weight:500;white-space:nowrap}
+  .chip .dot{width:7px;height:7px;border-radius:50%;background:var(--text-3)}
+  .chip.ok .dot{background:var(--green)} .chip.bad .dot{background:var(--red)}
+
+  /* layout */
+  .wrap{max-width:1280px;margin:0 auto;padding:22px 24px 40px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(360px,.9fr);gap:20px}
+  @media (max-width:980px){.wrap{grid-template-columns:1fr}}
+  .card{background:var(--white);border:.8px solid var(--border);border-radius:var(--r-lg);padding:20px}
+  .card h2{margin:0 0 4px;font-size:17px;font-weight:600;letter-spacing:-.01em}
+  .card .sub{margin:0 0 14px;color:var(--text-2);font-size:14px}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:9999px;border:0;background:var(--blue);color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background .15s,transform .05s}
+  .btn:hover{background:var(--blue-hover)} .btn:active{transform:translateY(1px)}
+  .btn.secondary{background:var(--blue-tint);color:var(--text)} .btn.secondary:hover{background:rgba(5,54,89,.16)}
+  .btn.ghost{background:transparent;color:var(--text-2)} .btn.ghost:hover{background:var(--surface);color:var(--text)}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+  .btn svg{width:16px;height:16px}
+
+  /* hero (empty state) */
+  .hero{padding:34px 28px;border-radius:var(--r-lg);background:linear-gradient(160deg,#EEF3FA 0%,#F7F9FC 55%,#FFFFFF 100%);border:.8px solid var(--border)}
+  .hero h1{margin:0 0 8px;font-size:34px;line-height:1.08;font-weight:500;letter-spacing:-.02em}
+  .hero p{margin:0 0 18px;color:var(--text-2);font-size:16px;max-width:52ch}
+  .hero .how{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
+  @media (max-width:700px){.hero .how{grid-template-columns:1fr}}
+  .how div{background:rgba(255,255,255,.75);border:.8px solid var(--border);border-radius:var(--r-md);padding:12px 14px;font-size:14px}
+  .how b{display:block;margin-bottom:2px;font-weight:600}
+
+  /* video + timeline */
+  .player{position:relative;border-radius:var(--r-md);overflow:hidden;background:var(--ink);aspect-ratio:16/9}
+  .player video{width:100%;height:100%;display:block;object-fit:contain;background:var(--ink)}
+  .timeline{position:relative;height:38px;margin-top:12px;border-radius:9999px;background:var(--surface);overflow:hidden}
+  .timeline .played{position:absolute;left:0;top:0;bottom:0;background:var(--blue-tint);width:0}
+  .timeline .mark{position:absolute;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--blue);opacity:.85;cursor:pointer}
+  .timeline .mark.audio{background:var(--amber)} .timeline .mark.both{background:var(--blue-deep)}
+  .timeline .head{position:absolute;top:0;bottom:0;width:2px;background:var(--text)}
+  .legend{display:flex;gap:14px;margin-top:8px;font-size:12.5px;color:var(--text-2)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+  /* clips */
+  .clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:6px}
+  .clip{border:.8px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface-2)}
+  .clip video{width:100%;aspect-ratio:16/9;display:block;background:var(--ink)}
+  .clip span{display:block;padding:7px 10px;font-size:12.5px;color:var(--text-2);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .empty{padding:18px;border:1px dashed var(--border);border-radius:var(--r-md);color:var(--text-3);font-size:14px;text-align:center}
+
+  /* coach panel */
+  .coach{display:flex;flex-direction:column;min-height:560px;max-height:calc(100vh - 110px);position:sticky;top:82px}
+  .coach .head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .avatar{width:34px;height:34px;border-radius:50%;background:var(--blue);display:grid;place-items:center;color:#fff;font-weight:600;font-size:14px}
+  .avatar.live{box-shadow:0 0 0 4px rgba(0,100,224,.18);animation:pulse 1.2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,100,224,.35)}100%{box-shadow:0 0 0 10px rgba(0,100,224,0)}}
+  .coach .status{font-size:13px;color:var(--text-2)}
+  .feed{flex:1;overflow:auto;padding:6px 2px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+  .msg{max-width:92%;padding:10px 14px;border-radius:18px;font-size:14.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+  .msg.me{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:6px}
+  .msg.coach{align-self:flex-start;background:var(--surface);border-bottom-left-radius:6px}
+  .msg.err{align-self:stretch;background:#FDECEC;color:var(--red);border-radius:12px;font-size:13.5px}
+  .step{align-self:flex-start;max-width:92%;border:.8px solid var(--border);border-radius:12px;padding:8px 12px;font-size:13px;background:var(--white)}
+  .step .t{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--text)}
+  .step .t .k{font-family:var(--mono);font-weight:500;font-size:12.5px;background:var(--surface);padding:1px 7px;border-radius:6px}
+  .step .t .spin{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:rot .8s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .step .t .ok{color:var(--green)}
+  .step .a,.step .o{margin-top:4px;color:var(--text-2);font-family:var(--mono);font-size:12px;white-space:pre-wrap;word-break:break-all}
+  .step .o{color:var(--text);border-top:.8px solid var(--border);padding-top:4px}
+  .composer{margin-top:10px;border:.8px solid var(--border);border-radius:var(--r-md);padding:8px;display:flex;align-items:flex-end;gap:8px;background:var(--white)}
+  .composer:focus-within{border-color:var(--blue)}
+  .composer textarea{flex:1;border:0;outline:0;resize:none;background:transparent;padding:6px 8px;max-height:120px;font-size:14.5px}
+  .icon{width:36px;height:36px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;background:var(--surface);color:var(--text)}
+  .icon:hover{background:var(--border)} .icon.on{background:var(--red);color:#fff} .icon.primary{background:var(--blue);color:#fff} .icon.primary:hover{background:var(--blue-hover)}
+  .icon svg{width:18px;height:18px}
+  .tips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .tip{font-size:12.5px;padding:5px 10px;border-radius:9999px;background:var(--surface);color:var(--text-2);border:0;cursor:pointer}
+  .tip:hover{background:var(--border);color:var(--text)}
+  .foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;color:var(--text-3)}
+  .toggle{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .toggle input{accent-color:var(--blue)}
+
+  /* memory */
+  .notes{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto}
+  .note{font-size:13.5px;padding:8px 10px;border-radius:10px;background:var(--surface)}
+  .note b{display:block;font-size:12px;color:var(--text-2);font-weight:500;margin-bottom:2px}
+  .stack{display:flex;flex-direction:column;gap:20px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="mark"><i></i></span>Coach <small>by Muse Replay</small></div>
+  <span class="chip">Built on Meta Model API</span>
+  <div class="spacer"></div>
+  <span id="status" class="chip"><span class="dot"></span>Checking</span>
+  <a class="btn ghost" href="https://github.com/agamble33/muse-replay" target="_blank" rel="noopener">Source</a>
+</header>
+
+<main class="wrap">
+  <section class="stack">
+    <div id="hero" class="hero">
+      <h1>An AI teammate that watches, talks, and acts.</h1>
+      <p>Coach joins your match, sees what you see through video, listens through voice, and does things through tool calls: finds the big moments, cuts the clips, remembers the lesson for next time.</p>
+      <div class="row">
+        <label class="btn" for="file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Load a match video
+        </label>
+        <input id="file" type="file" accept=".mp4,.mkv,.mov,.webm,video/*" hidden>
+        <button id="sample" class="btn secondary">Use the sample match</button>
+        <span id="upmsg" class="status" style="color:var(--text-2);font-size:13px"></span>
+      </div>
+      <div class="how">
+        <div><b>Watches</b>Muse Spark looks at any second of the match you ask about.</div>
+        <div><b>Talks</b>Muse Voice Transcribe hears you; Coach answers out loud.</div>
+        <div><b>Acts</b>Tool calls find moments, cut clips, and keep match memory.</div>
+      </div>
+    </div>
+
+    <div id="matchCard" class="card" hidden>
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div><h2 id="matchName">Match</h2><p class="sub" id="matchInfo" style="margin:0"></p></div>
+        <div class="row">
+          <label class="btn ghost" for="file">Change video</label>
+          <button id="sample2" class="btn ghost">Sample</button>
+        </div>
+      </div>
+      <div class="player"><video id="video" controls playsinline></video></div>
+      <div class="timeline" id="timeline"><div class="played" id="played"></div><div class="head" id="head"></div></div>
+      <div class="legend"><span><i style="background:var(--blue)"></i>Scene change</span><span><i style="background:var(--amber)"></i>Loud moment</span><span><i style="background:var(--blue-deep)"></i>Both</span><span style="margin-left:auto">Click a marker to jump</span></div>
+    </div>
+
+    <div id="clipsCard" class="card" hidden>
+      <h2>Highlights Coach cut</h2>
+      <p class="sub">Each clip is an mp4 written by a <code>cut_clip</code> tool call.</p>
+      <div id="clips" class="clips"></div>
+      <div id="noclips" class="empty">No clips yet. Ask Coach to clip the best moment.</div>
+    </div>
+
+    <div class="card">
+      <h2>Match memory</h2>
+      <p class="sub">Notes Coach saved with <code>remember</code>. They persist across matches.</p>
+      <div id="notes" class="notes"></div>
+      <div id="nonotes" class="empty">Nothing remembered yet.</div>
+    </div>
+  </section>
+
+  <aside class="card coach">
+    <div class="head">
+      <div id="avatar" class="avatar">C</div>
+      <div><div style="font-weight:600">Coach</div><div id="cstatus" class="status">Ready when you are</div></div>
+    </div>
+    <div id="feed" class="feed">
+      <div class="msg coach">Hey, I'm Coach. Load a match and tell me what you want: a read on a moment, the best clip, or what we learned last time.</div>
+    </div>
+    <div class="tips" id="tips">
+      <button class="tip" data-t="What's happening at 15 seconds?">What's happening at 15 seconds?</button>
+      <button class="tip" data-t="Find the biggest moment and clip it.">Clip the biggest moment</button>
+      <button class="tip" data-t="Remember: we lose rounds when we both push mid.">Remember a lesson</button>
+      <button class="tip" data-t="What did we learn last match?">What did we learn?</button>
+    </div>
+    <div class="composer">
+      <button id="mic" class="icon" title="Hold to talk (or click to toggle)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+      </button>
+      <textarea id="input" rows="1" placeholder="Talk to Coach"></textarea>
+      <button id="send" class="icon primary" title="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+    <div class="foot">
+      <label class="toggle"><input id="voice" type="checkbox" checked> Coach speaks replies</label>
+      <span id="usage"></span>
+    </div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const state = { match: null, busy: false, rec: null, chunks: [] };
+
+  // ---------- helpers ----------
+  const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  function add(cls, html){ const d=document.createElement('div'); d.className=cls; d.innerHTML=html; $('feed').appendChild(d); $('feed').scrollTop=$('feed').scrollHeight; return d; }
+  function setStatus(t, live){ $('cstatus').textContent=t; $('avatar').classList.toggle('live', !!live); }
+  function speak(text){
+    if(!$('voice').checked || !('speechSynthesis' in window) || !text) return;
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text.replace(/\s*[—–]\s*/g,', ')); u.rate=1.05;
+    const v=speechSynthesis.getVoices().find(v=>/en[-_]US/i.test(v.lang) && /Natural|Premium|Enhanced|Google/i.test(v.name)) || speechSynthesis.getVoices().find(v=>/en/i.test(v.lang));
+    if(v) u.voice=v; speechSynthesis.speak(u);
+  }
+
+  // ---------- health ----------
+  fetch('/api/health').then(r=>r.json()).then(h=>{
+    const c=$('status'); c.className='chip '+(h.ok?'ok':'bad'); c.innerHTML=`<span class="dot"></span>${h.ok?'Meta Model API connected':'Model API not configured'}`;
+  }).catch(()=>{ $('status').className='chip bad'; $('status').innerHTML='<span class="dot"></span>Server offline'; });
+
+  // ---------- match ----------
+  function showMatch(m){
+    state.match=m;
+    $('hero').hidden=true; $('matchCard').hidden=false; $('clipsCard').hidden=false;
+    $('matchName').textContent=m.name;
+    const i=m.info; $('matchInfo').textContent=`${fmt(i.duration_s)} · ${i.width}×${i.height} · ${Math.round(i.fps)} fps${i.has_audio?'':' · no audio'} · ${m.moments.length} moments found`;
+    const v=$('video'); v.src=`/api/match/${m.id}/video`; v.load();
+    const tl=$('timeline'); [...tl.querySelectorAll('.mark')].forEach(e=>e.remove());
+    m.moments.forEach(w=>{ const e=document.createElement('div'); const kind=w.kinds.length>1?'both':(w.kinds[0]==='audio'?'audio':'scene');
+      e.className='mark '+kind; e.style.left=(w.peak/i.duration_s*100)+'%'; e.title=`${fmt(w.peak)} · ${w.kinds.join(' + ')} · score ${w.score}`;
+      e.onclick=()=>{ v.currentTime=w.peak; v.play(); }; tl.appendChild(e); });
+    renderClips(m.clips);
+  }
+  function renderClips(list){
+    const c=$('clips'); c.innerHTML=''; $('noclips').hidden=list.length>0;
+    list.forEach(n=>{ const d=document.createElement('div'); d.className='clip';
+      d.innerHTML=`<video src="/api/match/${state.match.id}/clips/${encodeURIComponent(n)}" controls preload="metadata" playsinline></video><span>${esc(n)}</span>`; c.appendChild(d); });
+  }
+  async function refreshMatch(){ if(!state.match) return; const m=await (await fetch(`/api/match/${state.match.id}`)).json(); state.match=m; renderClips(m.clips); }
+  async function loadMemory(){ const d=await (await fetch('/api/memory')).json(); const n=$('notes'); n.innerHTML=''; $('nonotes').hidden=d.notes.length>0;
+    d.notes.slice().reverse().forEach(x=>{ const e=document.createElement('div'); e.className='note'; e.innerHTML=`<b>${esc(x.match)} · ${new Date(x.ts*1000).toLocaleString()}</b>${esc(x.text)}`; n.appendChild(e); }); }
+  $('video').addEventListener('timeupdate',()=>{ const v=$('video'); if(!v.duration) return; const p=v.currentTime/v.duration*100; $('played').style.width=p+'%'; $('head').style.left=p+'%'; });
+  $('timeline').addEventListener('click',e=>{ if(e.target.classList.contains('mark')) return; const r=e.currentTarget.getBoundingClientRect(); const v=$('video'); v.currentTime=(e.clientX-r.left)/r.width*v.duration; });
+
+  async function upload(file){
+    $('upmsg').textContent=`Uploading ${file.name}…`;
+    const fd=new FormData(); fd.append('file',file);
+    try{ const r=await fetch('/api/match',{method:'POST',body:fd}); const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+      showMatch(j); add('msg coach',`Got it, ${esc(j.name)} is loaded. ${j.moments.length} moments on the timeline. What do you want to look at?`); }
+    catch(e){ $('upmsg').textContent='Could not load: '+e.message; }
+  }
+  async function sample(){
+    $('upmsg').textContent='Building sample…';
+    try{ const r=await fetch('/api/match/sample',{method:'POST'}); const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+      showMatch(j); add('msg coach','Sample match loaded. It has two hard cuts and one loud burst so you can see every tool work.'); }
+    catch(e){ $('upmsg').textContent='Could not build sample: '+e.message; }
+  }
+  $('file').addEventListener('change',e=>{ if(e.target.files[0]) upload(e.target.files[0]); e.target.value=''; });
+  $('sample').onclick=sample; $('sample2').onclick=sample;
+
+  // ---------- turn (SSE over fetch) ----------
+  async function send(text){
+    text=(text||$('input').value).trim(); if(!text||state.busy) return;
+    $('input').value=''; state.busy=true; $('send').disabled=true; setStatus('Thinking…', true);
+    add('msg me', esc(text));
+    let step=null;
+    try{
+      const r=await fetch('/api/turn',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({match_id:state.match?state.match.id:null,text})});
+      if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.detail||('HTTP '+r.status)); }
+      const reader=r.body.getReader(); const dec=new TextDecoder(); let buf='';
+      while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+        let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+          const ev=/^event: (\w+)/m.exec(block)?.[1]; const data=JSON.parse(/^data: (.*)$/m.exec(block)?.[1]||'{}');
+          if(ev==='tool_call'){ setStatus(`Using ${data.name}…`, true);
+            step=add('step',`<div class="t"><span class="spin"></span>Coach is using <span class="k">${esc(data.name)}</span></div><div class="a">${esc(data.arguments||'')}</div>`); }
+          else if(ev==='tool_result' && step){ step.querySelector('.spin').outerHTML='<span class="ok">✓</span>'; const o=document.createElement('div'); o.className='o'; o.textContent=data.output; step.appendChild(o);
+            if(data.name==='cut_clip') refreshMatch(); if(data.name==='remember') loadMemory(); if(data.name==='callout'){ const m=/\): (.*)$/s.exec(data.output); if(m) speak(m[1]); } }
+          else if(ev==='done'){ add('msg coach', esc(data.text||'(no reply)')); speak(data.text); $('usage').textContent=`${data.rounds} round${data.rounds===1?'':'s'} · ${data.input_tokens+data.output_tokens} tokens`; }
+          else if(ev==='error'){ add('msg err', esc(data.message)); }
+        } }
+    }catch(e){ add('msg err','Coach could not answer: '+e.message); }
+    finally{ state.busy=false; $('send').disabled=false; setStatus('Ready when you are', false); }
+  }
+  $('send').onclick=()=>send();
+  $('input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } });
+  $('input').addEventListener('input',e=>{ e.target.style.height='auto'; e.target.style.height=Math.min(120,e.target.scrollHeight)+'px'; });
+  $('tips').addEventListener('click',e=>{ const t=e.target.closest('.tip'); if(t) send(t.dataset.t); });
+
+  // ---------- mic (push to talk) ----------
+  async function startRec(){
+    if(state.rec) return;
+    try{ const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4',''].find(m=>!m||MediaRecorder.isTypeSupported(m));
+      const rec=new MediaRecorder(stream, mime?{mimeType:mime}:undefined); state.chunks=[];
+      rec.ondataavailable=e=>{ if(e.data.size) state.chunks.push(e.data); };
+      rec.onstop=async()=>{ stream.getTracks().forEach(t=>t.stop()); state.rec=null; $('mic').classList.remove('on');
+        const blob=new Blob(state.chunks,{type:rec.mimeType||'audio/webm'}); if(blob.size<2000){ setStatus('Too short, try again',false); return; }
+        setStatus('Transcribing…', true); const fd=new FormData(); fd.append('file',blob,'speech.'+((rec.mimeType||'').includes('mp4')?'mp4':'webm'));
+        try{ const r=await fetch('/api/transcribe',{method:'POST',body:fd}); const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+          if(j.transcript){ $('input').value=j.transcript; send(j.transcript); } else { setStatus("Didn't catch that",false); } }
+        catch(e){ add('msg err','Transcription failed: '+e.message); setStatus('Ready when you are',false); } };
+      rec.start(); state.rec=rec; $('mic').classList.add('on'); setStatus('Listening… release to send', true);
+    }catch(e){ add('msg err','Microphone not available: '+e.message); }
+  }
+  function stopRec(){ if(state.rec && state.rec.state!=='inactive') state.rec.stop(); }
+  const mic=$('mic'); let holdTimer=null, held=false;
+  mic.addEventListener('pointerdown',e=>{ e.preventDefault(); held=false; holdTimer=setTimeout(()=>{held=true;},250); startRec(); });
+  mic.addEventListener('pointerup',()=>{ clearTimeout(holdTimer); if(held) stopRec(); });   // hold = push to talk; tap = toggle
+  mic.addEventListener('pointerleave',()=>{ if(held) stopRec(); });
+  mic.addEventListener('click',()=>{ if(!held && state.rec && state.rec._tapped) stopRec(); else if(state.rec) state.rec._tapped=true; });
+  if(!navigator.mediaDevices || !window.MediaRecorder){ mic.disabled=true; mic.title='Microphone needs a secure (https) page'; }
+
+  loadMemory();
+  if('speechSynthesis' in window) speechSynthesis.getVoices();
+})();
+</script>
+</body>
+</html>

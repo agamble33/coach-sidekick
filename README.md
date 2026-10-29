@@ -19,7 +19,8 @@ Each gate ships with tests and must pass before the next one starts.
 | 2 | Clips: detect key moments, cut highlight clips | Done |
 | 3 | Voice: speech in (Muse Voice Transcribe), Coach replies (Muse Spark), spoken replies | Done |
 | 4 | Agent: Coach as a teammate that acts through tool calls (look, find_moments, cut_clip, remember, recall, callout) | Done |
-| 5 | Memory and highlight reels (Muse Image) | Planned |
+| 5 | Web app: match player, moment timeline, live tool-call feed, voice in/out, clips, memory | Done |
+| 6 | Highlight reels with Muse Image, hosted demo | Planned |
 
 ## Quick start
 
@@ -35,6 +36,10 @@ python -m muse_replay transcribe callout.wav --keyword Coach       # speech to t
 python -m muse_replay coach "they're flanking left" --speak          # Coach replies, out loud
 python -m muse_replay play "clip the best moment" --video match.mp4  # Coach acts through tools
 python scripts/live_check.py                                       # live smoke test (uses credits)
+
+# Web app
+pip install -e ".[web]"
+uvicorn web.app:app --reload          # then open http://127.0.0.1:8000
 pytest
 ```
 
