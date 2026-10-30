@@ -1,6 +1,6 @@
 import pytest
 
-from muse_replay.config import (
+from coach.config import (
     BASETEN_DEFAULT_MODEL,
     BASETEN_DEFAULT_URL,
     ConfigError,

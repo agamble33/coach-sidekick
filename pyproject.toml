@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "muse-replay"
+name = "coach-sidekick"
 version = "0.0.1"
 description = "Coach: an AI co-op teammate built on Meta's Muse models"
 readme = "README.md"

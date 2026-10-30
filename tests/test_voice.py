@@ -3,9 +3,9 @@ import struct
 
 import pytest
 
-from muse_replay.config import load_settings
-from muse_replay.meta_api import MetaClient
-from muse_replay.voice import (
+from coach.config import load_settings
+from coach.meta_api import MetaClient
+from coach.voice import (
     VoiceError, build_asr_request, check_wav, clean_for_speech, parse_transcript, speak,
     to_wav_24k, transcribe_file,
 )
@@ -162,9 +162,9 @@ def test_speak_print_fallback(capsys):
 # ---- CLI ----
 
 def test_cli_coach_and_transcribe(monkeypatch, clip, capsys):
-    from muse_replay import __main__ as cli
-    from muse_replay.coach_llm import Reply
-    from muse_replay.voice import Transcript
+    from coach import __main__ as cli
+    from coach.coach_llm import Reply
+    from coach.voice import Transcript
     monkeypatch.setenv("META_API_KEY", "k")
     monkeypatch.setenv("META_BASE_URL", "https://x.example/v1")
     monkeypatch.setattr(cli, "coach_reply", lambda c, text, ctx: Reply(f"re: {text}", 1, 1, 0))
@@ -176,7 +176,7 @@ def test_cli_coach_and_transcribe(monkeypatch, clip, capsys):
 
 
 def test_cli_coach_unconfigured(monkeypatch, capsys):
-    from muse_replay import __main__ as cli
+    from coach import __main__ as cli
     for k in ["META_API_KEY", "META_BASE_URL"]:
         monkeypatch.delenv(k, raising=False)
     assert cli.main(["coach", "hi"]) == 1

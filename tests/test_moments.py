@@ -1,6 +1,6 @@
 import pytest
 
-from muse_replay.moments import (
+from coach.moments import (
     ClipWindow, Event, MomentError, clip_windows, merge_events, pick_clips, rank_moments,
 )
 

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from muse_replay.annotations import AnnotationStore
+from coach.annotations import AnnotationStore
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 32 + b"\xff\xd9"
 

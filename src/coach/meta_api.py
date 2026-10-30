@@ -35,7 +35,7 @@ def urllib_transport(method: str, url: str, headers: Mapping[str, str], body: by
 
 def encode_multipart(fields: Mapping[str, tuple[str, bytes, str]]) -> tuple[bytes, str]:
     """fields: name -> (filename or '', data, content_type). Returns (body, content_type)."""
-    boundary = "----muse-replay-" + secrets.token_hex(12)
+    boundary = "----coach-sidekick-" + secrets.token_hex(12)
     out = bytearray()
     for name, (filename, data, ctype) in fields.items():
         out += f"--{boundary}\r\n".encode()

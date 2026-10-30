@@ -24,7 +24,7 @@ from .meta_api import MetaAPIError, MetaClient
 from .moments import MomentError, pick_clips
 from .voice import speak
 
-VISION_MODEL = "muse-spark-1.3"
+VISION_MODEL = os.environ.get("META_MODEL", "muse-spark-1.3-contributor")
 LIVE_MAX_FRAME_BYTES = 2 * 1024 * 1024
 LIVE_STALE_S = 30.0
 

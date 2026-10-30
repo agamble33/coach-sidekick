@@ -1,11 +1,24 @@
-# Coach, by Muse Replay
+# Coach
 
 **An in-game AI sidekick.** Coach plays with you, not for you: live strategy while you play, a guide that teaches new players by playing alongside them, and a teammate that remembers what happened last match. It sees the game, hears you, talks back, and acts through tool calls.
 
 - **For players:** a teammate on voice chat that watches your screen, calls out what matters, and clips the plays worth keeping.
 - **For studios:** drop in a playbook and Coach onboards new players inside the game. No training portal, no tutorial level to build.
 
-Built for the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026) on Meta's Muse models through the Meta Model API.
+Built for the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026). Coach is an independent project by Goals and Gambles LLC; it is not a Meta product and uses no Meta brand assets. Model names below are stated only to document which models it calls.
+
+## What is a Meta model call and what is not
+
+| Part | What it uses |
+|---|---|
+| Reasoning, tool calling, teaching, replies | Muse Spark 1.3 (Contributor variant by default) through the Meta Model API `/responses` endpoint |
+| Seeing the game (`look`, `look_now`) | The same Muse Spark call with an image input |
+| Speech to text (mic, `transcribe`) | Muse Voice Transcribe 1.0 through `/asr/transcribe` |
+| Speech out | No model. The operating system voice (Windows SAPI, macOS say, espeak) in the CLI; the browser's built-in `speechSynthesis` in the web app |
+| Finding moments and cutting clips | No model. ffmpeg scene-change scores and audio loudness statistics |
+| Memory, playbook, annotations | No model. Local JSON and JSONL files |
+
+No other model, hosted or local, is called at runtime.
 
 ## Features
 
@@ -68,12 +81,12 @@ python -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 cp .env.example .env           # then fill in your keys
-python -m muse_replay health   # shows which model providers are configured
-python -m muse_replay ingest match.mp4 --out frames/ --every 2   # sample frames
-python -m muse_replay clips match.mp4 --out highlights/ --top 5   # cut highlight clips
-python -m muse_replay transcribe callout.wav --keyword Coach       # speech to text
-python -m muse_replay coach "they're flanking left" --speak          # Coach replies, out loud
-python -m muse_replay play "clip the best moment" --video match.mp4  # Coach acts through tools
+python -m coach health   # shows which model providers are configured
+python -m coach ingest match.mp4 --out frames/ --every 2   # sample frames
+python -m coach clips match.mp4 --out highlights/ --top 5   # cut highlight clips
+python -m coach transcribe callout.wav --keyword Coach       # speech to text
+python -m coach coach "they're flanking left" --speak          # Coach replies, out loud
+python -m coach play "clip the best moment" --video match.mp4  # Coach acts through tools
 python scripts/live_check.py                                       # live smoke test (uses credits)
 
 # Web app

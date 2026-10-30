@@ -6,7 +6,9 @@ from dataclasses import dataclass
 
 from .meta_api import MetaClient
 
-DEFAULT_MODEL = "muse-spark-1.3"
+import os
+
+DEFAULT_MODEL = os.environ.get("META_MODEL", "muse-spark-1.3-contributor")
 MAX_INPUT_CHARS = 8000
 
 COACH_SYSTEM = (

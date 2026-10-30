@@ -13,9 +13,9 @@ def health_report(env: Mapping[str, str] | None = None) -> tuple[int, str]:
     try:
         settings = load_settings(env)
     except ConfigError as exc:
-        return 2, f"muse-replay {__version__}: config error: {exc}"
+        return 2, f"coach-sidekick {__version__}: config error: {exc}"
 
-    lines = [f"muse-replay {__version__}"]
+    lines = [f"coach-sidekick {__version__}"]
     for name, ok in settings.providers().items():
         lines.append(f"  {name}: {'configured' if ok else 'missing'}")
     code = 0 if any(settings.providers().values()) else 1

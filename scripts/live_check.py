@@ -13,11 +13,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from muse_replay.coach_llm import coach_reply            # noqa: E402
-from muse_replay.config import load_settings             # noqa: E402
-from muse_replay.health import health_report             # noqa: E402
-from muse_replay.meta_api import MetaClient              # noqa: E402
-from muse_replay.voice import speak, transcribe_file     # noqa: E402
+from coach.coach_llm import coach_reply            # noqa: E402
+from coach.config import load_settings             # noqa: E402
+from coach.health import health_report             # noqa: E402
+from coach.meta_api import MetaClient              # noqa: E402
+from coach.voice import speak, transcribe_file     # noqa: E402
 
 
 def load_dotenv(path: Path) -> None:
@@ -49,9 +49,9 @@ def main() -> int:
     # Agent with tools on a synthetic match (made with ffmpeg, no real footage needed).
     import subprocess
     import tempfile
-    from muse_replay.agent import CoachAgent
-    from muse_replay.memory import MatchMemory
-    from muse_replay.tools import Session
+    from coach.agent import CoachAgent
+    from coach.memory import MatchMemory
+    from coach.tools import Session
     with tempfile.TemporaryDirectory() as td:
         video = Path(td) / "match.mp4"
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "smptebars=duration=10:size=320x240:rate=30",
@@ -71,10 +71,10 @@ def main() -> int:
         print(f"memory notes: {len(session.memory)}, clips: {len(list((Path(td) / 'clips').glob('*.mp4'))) if (Path(td) / 'clips').exists() else 0}")
 
         # Live mode + playbook: push one real frame (grabbed from the synthetic match) and run a teach tick.
-        from muse_replay.agent import TEACH_PROMPT, WATCH_PROMPT
-        from muse_replay.ingest import sample_frames
-        from muse_replay.playbook import make_playbook
-        from muse_replay.tools import LiveFeed
+        from coach.agent import TEACH_PROMPT, WATCH_PROMPT
+        from coach.ingest import sample_frames
+        from coach.playbook import make_playbook
+        from coach.tools import LiveFeed
         _, frames = sample_frames(str(video), Path(td) / "lf", every_s=1, max_frames=1, width=960, start_s=15, end_s=15.5)
         feed = LiveFeed(); feed.push(Path(frames[0].path).read_bytes())
         pb = make_playbook({"game": "Test Card TV", "goal": "Keep the colour bars on screen and never let the picture go black.",

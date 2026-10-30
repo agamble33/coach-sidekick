@@ -5,9 +5,9 @@ import pytest
 fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
-from muse_replay.agent import TurnResult  # noqa: E402
-from muse_replay.memory import MatchMemory  # noqa: E402
-from muse_replay.voice import Transcript  # noqa: E402
+from coach.agent import TurnResult  # noqa: E402
+from coach.memory import MatchMemory  # noqa: E402
+from coach.voice import Transcript  # noqa: E402
 
 
 @pytest.fixture
@@ -17,9 +17,9 @@ def client(tmp_path, monkeypatch):
     import web.app as webapp
     importlib.reload(webapp)
     webapp.app.state.memory = MatchMemory(tmp_path / "data" / "memory.json")
-    from muse_replay.playbook import PlaybookStore
+    from coach.playbook import PlaybookStore
     webapp.app.state.playbooks = PlaybookStore(tmp_path / "data" / "playbook.json")
-    from muse_replay.annotations import AnnotationStore
+    from coach.annotations import AnnotationStore
     webapp.app.state.annotations = AnnotationStore(tmp_path / "data" / "annotations" / "records.jsonl")
     webapp._agents.clear(); webapp._live.clear()
 
@@ -120,7 +120,7 @@ def test_turn_without_match_and_validation(client, monkeypatch):
 
 def test_turn_reports_api_error_as_event(client, monkeypatch):
     c, webapp = client
-    from muse_replay.meta_api import MetaAPIError
+    from coach.meta_api import MetaAPIError
 
     class FakeAgent:
         def __init__(self, client, session, **kw):
@@ -161,7 +161,7 @@ def test_transcribe_converts_then_calls_api(client, clip):
 
 def test_unconfigured_api_gives_503(client, monkeypatch):
     c, webapp = client
-    from muse_replay.meta_api import MetaAPIError
+    from coach.meta_api import MetaAPIError
 
     def boom():
         raise MetaAPIError(0, "META_API_KEY and META_BASE_URL are required")
@@ -188,7 +188,7 @@ def test_live_session_frames_and_stop(client):
 
 def test_watch_turn_uses_live_feed(client, monkeypatch):
     c, webapp = client
-    from muse_replay.agent import WATCH_PROMPT
+    from coach.agent import WATCH_PROMPT
     seen = {}
 
     class FakeAgent:
@@ -216,7 +216,7 @@ def test_watch_turn_uses_live_feed(client, monkeypatch):
 
 def test_playbook_routes_and_teach_turn(client, monkeypatch):
     c, webapp = client
-    from muse_replay.agent import TEACH_PROMPT
+    from coach.agent import TEACH_PROMPT
     assert c.get("/api/playbook").json() == {"playbook": None}
     assert c.put("/api/playbook", json={"game": "", "goal": "x"}).status_code == 422
     assert c.put("/api/playbook", json={"game": "Rocket Rally"}).status_code == 400

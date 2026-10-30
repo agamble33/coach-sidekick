@@ -2,8 +2,8 @@ import socket
 
 import pytest
 
-from muse_replay.__main__ import main
-from muse_replay.health import health_report
+from coach.__main__ import main
+from coach.health import health_report
 
 
 @pytest.fixture(autouse=True)

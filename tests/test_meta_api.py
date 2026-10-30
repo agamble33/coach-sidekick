@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from muse_replay.config import load_settings
-from muse_replay.meta_api import MetaAPIError, MetaClient, encode_multipart
+from coach.config import load_settings
+from coach.meta_api import MetaAPIError, MetaClient, encode_multipart
 
 SETTINGS = load_settings({"META_API_KEY": "SECRET-KEY", "META_BASE_URL": "https://api.example/v1"})
 

@@ -1,7 +1,7 @@
 # Render blueprint: connect the repo, set META_API_KEY in the dashboard, deploy.
 services:
   - type: web
-    name: coach-muse-replay
+    name: coach-coach-sidekick
     runtime: docker
     plan: starter
     region: ohio

@@ -2,12 +2,12 @@ import json
 
 import pytest
 
-from muse_replay.agent import AGENT_SYSTEM, TEACH_PROMPT, CoachAgent, instructions_for
-from muse_replay.config import load_settings
-from muse_replay.memory import MatchMemory
-from muse_replay.meta_api import MetaClient
-from muse_replay.playbook import MAX_CHARS, Playbook, PlaybookError, PlaybookStore, make_playbook
-from muse_replay.tools import Session
+from coach.agent import AGENT_SYSTEM, TEACH_PROMPT, CoachAgent, instructions_for
+from coach.config import load_settings
+from coach.memory import MatchMemory
+from coach.meta_api import MetaClient
+from coach.playbook import MAX_CHARS, Playbook, PlaybookError, PlaybookStore, make_playbook
+from coach.tools import Session
 
 GOOD = {"game": "Rocket Rally", "goal": "Score more goals than the other team in 5 minutes.",
         "controls": "A/D steer, Space boost, Shift drift.", "mistakes": "Chasing the ball while your goal is empty."}

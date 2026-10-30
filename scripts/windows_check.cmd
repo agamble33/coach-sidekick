@@ -12,7 +12,7 @@ pause
 exit /b 0
 
 :inner
-echo === muse-replay Windows check %date% %time%
+echo === coach-sidekick Windows check %date% %time%
 echo repo: %cd%
 set "PATH=%LOCALAPPDATA%\Microsoft\WinGet\Links;%PATH%"
 set "PY="

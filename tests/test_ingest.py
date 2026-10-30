@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from muse_replay.__main__ import main
-from muse_replay.ingest import IngestError, plan_timestamps, probe, sample_frames
+from coach.__main__ import main
+from coach.ingest import IngestError, plan_timestamps, probe, sample_frames
 
 
 # ---- plan_timestamps (pure) ----
@@ -90,7 +90,7 @@ def test_fake_video_rejected(tmp_path):
 
 def test_missing_ffprobe(monkeypatch, clip):
     monkeypatch.setenv("FFPROBE_BIN", "")
-    monkeypatch.setattr("muse_replay.ingest.shutil.which", lambda name: None)
+    monkeypatch.setattr("coach.ingest.shutil.which", lambda name: None)
     with pytest.raises(IngestError, match="ffprobe not found"):
         probe(clip)
 

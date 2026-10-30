@@ -2,8 +2,8 @@
 setlocal EnableExtensions
 cd /d "%~dp0.."
 set "PATH=%LOCALAPPDATA%\Microsoft\WinGet\Links;%PATH%"
-title Coach by Muse Replay
-echo === Coach (Muse Replay) ===
+title Coach by Coach
+echo === Coach (Coach) ===
 echo Installing web dependencies (first run only)...
 python -m pip install --quiet -e ".[web]"
 if errorlevel 1 (echo pip install failed & pause & exit /b 1)

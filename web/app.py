@@ -35,25 +35,25 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from muse_replay.agent import TEACH_PROMPT, WATCH_PROMPT, CoachAgent
-from muse_replay.annotations import AnnotationStore
-from muse_replay.clips import detect_audio_events, detect_scene_events
-from muse_replay.config import load_settings
-from muse_replay.health import health_report
-from muse_replay.ingest import VIDEO_SUFFIXES, IngestError, probe
-from muse_replay.memory import MatchMemory
-from muse_replay.meta_api import MetaAPIError, MetaClient
-from muse_replay.moments import pick_clips
-from muse_replay.playbook import PlaybookError, PlaybookStore
-from muse_replay.tools import LiveFeed, Session
-from muse_replay.voice import VoiceError, to_wav_24k, transcribe_file
+from coach.agent import TEACH_PROMPT, WATCH_PROMPT, CoachAgent
+from coach.annotations import AnnotationStore
+from coach.clips import detect_audio_events, detect_scene_events
+from coach.config import load_settings
+from coach.health import health_report
+from coach.ingest import VIDEO_SUFFIXES, IngestError, probe
+from coach.memory import MatchMemory
+from coach.meta_api import MetaAPIError, MetaClient
+from coach.moments import pick_clips
+from coach.playbook import PlaybookError, PlaybookStore
+from coach.tools import LiveFeed, Session
+from coach.voice import VoiceError, to_wav_24k, transcribe_file
 
 STATIC = Path(__file__).parent / "static"
 DATA = Path(os.environ.get("COACH_DATA", "coach_data")).resolve()
 MAX_UPLOAD = 500 * 1024 * 1024
 MAX_AUDIO = 25 * 1024 * 1024
 
-app = FastAPI(title="Muse Replay: Coach")
+app = FastAPI(title="Coach: Coach")
 _lock = threading.Lock()
 _agents: dict[str, CoachAgent] = {}
 _matches: dict[str, dict] = {}

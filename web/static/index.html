@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#0B0F16">
-<title>Coach · Muse Replay</title>
+<title>Coach, your in-game sidekick</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230064E0'/%3E%3Ccircle cx='16' cy='16' r='6' fill='white'/%3E%3C/svg%3E">
 <style>
   :root{
     --font:"Optimistic AI VF",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     --mono:"SF Mono",Monaco,Consolas,monospace;
     --r-sm:8px; --r-md:16px; --r-lg:24px;
-    /* Horizon (Quest home) look: glass panels over a dark horizon */
+    /* Dark look: glass panels over a deep gradient */
     --text:#F2F4F7; --text-2:#A9B0BA; --text-3:#6F7782;
     --border:rgba(255,255,255,.10); --surface:rgba(255,255,255,.07); --surface-2:rgba(255,255,255,.04); --white:rgba(22,27,36,.72);
     --blue:#1877F2; --blue-hover:#3B8CF5; --blue-tint:rgba(24,119,242,.18); --blue-deep:#7CB3FF;
@@ -186,12 +186,12 @@
 </head>
 <body>
 <header class="top">
-  <div class="brand"><span class="mark"><i></i></span>Coach <small>by Muse Replay</small></div>
+  <div class="brand"><span class="mark"><i></i></span>Coach <small>in-game sidekick</small></div>
   <span class="chip built">Built on Meta Model API</span>
   <div class="spacer"></div>
   <span id="status" class="chip"><span class="dot"></span>Checking</span>
   <button id="theme" class="btn ghost" title="Switch look">Light</button>
-  <a class="btn ghost" href="https://github.com/agamble33/muse-replay" target="_blank" rel="noopener">Source</a>
+  <a class="btn ghost" href="https://github.com/agamble33/coach-sidekick" target="_blank" rel="noopener">Source</a>
 </header>
 
 <main class="wrap">
@@ -264,7 +264,7 @@
           <b>Playbook for studios</b><span>Give Coach your game's rules, controls and goals. It teaches new players while they play. No tutorial level required.</span><em class="live">Live</em></div>
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
-          <b>Learns from you</b><span>Rate any callout. Good ones become examples Coach follows, corrections become ones it avoids, and the set exports for Muse training.</span><em class="live">Live</em></div>
+          <b>Learns from you</b><span>Rate any callout. Good ones become examples Coach follows, corrections become ones it avoids, and the set exports as training data for Meta open-weight models.</span><em class="live">Live</em></div>
         <div class="feat soon"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
           <b>Highlight reel</b><span>Clips stitched into a shareable reel with poster frames from Muse Image.</span><em>On the way</em></div>
@@ -320,7 +320,7 @@
         <h2>Gameplay data</h2>
         <div class="row"><button id="exportBtn" class="btn ghost">Export training set</button></div>
       </div>
-      <p class="sub">Every callout and reply is a record with the frame behind it. Rate them with the thumbs in the chat. Good ones become examples Coach follows; corrections become examples it avoids. The export is chat-tuning JSONL for Muse open-weight training.</p>
+      <p class="sub">Every callout and reply is a record with the frame behind it. Rate them with the thumbs in the chat. Good ones become examples Coach follows; corrections become examples it avoids. The export is chat-tuning JSONL for training Meta open-weight models.</p>
       <div class="stats">
         <div class="stat"><b id="st_records">0</b><span>records</span></div>
         <div class="stat"><b id="st_labeled">0</b><span>rated</span></div>
@@ -543,11 +543,11 @@
   mic.addEventListener('click',()=>{ if(!held && state.rec && state.rec._tapped) stopRec(); else if(state.rec) state.rec._tapped=true; });
   if(!navigator.mediaDevices || !window.MediaRecorder){ mic.disabled=true; mic.title='Microphone needs a secure (https) page'; }
 
-  // theme: Horizon (dark) by default, light on request, remembered per browser
+  // theme: dark by default, light on request, remembered per browser
   const root=document.documentElement;
-  function applyTheme(t){ if(t==='light') root.setAttribute('data-theme','light'); else root.removeAttribute('data-theme'); $('theme').textContent=t==='light'?'Horizon':'Light'; try{localStorage.setItem('coach-theme',t);}catch(e){} }
-  try{ applyTheme(localStorage.getItem('coach-theme')||'horizon'); }catch(e){ applyTheme('horizon'); }
-  $('theme').onclick=()=>applyTheme(root.getAttribute('data-theme')==='light'?'horizon':'light');
+  function applyTheme(t){ if(t==='light') root.setAttribute('data-theme','light'); else root.removeAttribute('data-theme'); $('theme').textContent=t==='light'?'Dark':'Light'; try{localStorage.setItem('coach-theme',t);}catch(e){} }
+  try{ applyTheme(localStorage.getItem('coach-theme')||'dark'); }catch(e){ applyTheme('dark'); }
+  $('theme').onclick=()=>applyTheme(root.getAttribute('data-theme')==='light'?'dark':'light');
 
   // ---------- studio playbook ----------
   const PB=['game','goal','controls','rules','tips','mistakes'];

@@ -2,11 +2,11 @@ import json
 
 import pytest
 
-from muse_replay.agent import AGENT_SYSTEM, CoachAgent, MAX_ROUNDS
-from muse_replay.config import load_settings
-from muse_replay.memory import MatchMemory
-from muse_replay.meta_api import MetaAPIError, MetaClient
-from muse_replay.tools import Session
+from coach.agent import AGENT_SYSTEM, CoachAgent, MAX_ROUNDS
+from coach.config import load_settings
+from coach.memory import MatchMemory
+from coach.meta_api import MetaAPIError, MetaClient
+from coach.tools import Session
 
 ENV = {"META_API_KEY": "k", "META_BASE_URL": "https://x.example/v1"}
 
@@ -114,8 +114,8 @@ def test_agent_cuts_a_real_clip_when_asked(tmp_path, match):
 
 
 def test_cli_play(monkeypatch, tmp_path, capsys):
-    from muse_replay import __main__ as cli
-    from muse_replay.agent import TurnResult
+    from coach import __main__ as cli
+    from coach.agent import TurnResult
     monkeypatch.setenv("META_API_KEY", "k")
     monkeypatch.setenv("META_BASE_URL", "https://x.example/v1")
 
@@ -132,8 +132,8 @@ def test_cli_play(monkeypatch, tmp_path, capsys):
 
 
 def test_agent_records_callouts_and_replies_with_frames(tmp_path):
-    from muse_replay.annotations import AnnotationStore
-    from muse_replay.tools import LiveFeed
+    from coach.annotations import AnnotationStore
+    from coach.tools import LiveFeed
     JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 32 + b"\xff\xd9"
     t = Scripted([
         {"id": "r1", "output": [{"type": "function_call", "name": "callout", "arguments": '{"text": "Rotate back"}', "call_id": "a"}], "usage": {}},
@@ -160,8 +160,8 @@ def test_agent_records_callouts_and_replies_with_frames(tmp_path):
 
 
 def test_watch_tick_quiet_is_not_recorded(tmp_path):
-    from muse_replay.agent import WATCH_PROMPT
-    from muse_replay.annotations import AnnotationStore
+    from coach.agent import WATCH_PROMPT
+    from coach.annotations import AnnotationStore
     agent = make_agent(tmp_path, Scripted([msg("quiet", rid="r1")]))
     agent.session.annotations = AnnotationStore(tmp_path / "ann.jsonl")
     r = agent.turn(WATCH_PROMPT)
@@ -169,7 +169,7 @@ def test_watch_tick_quiet_is_not_recorded(tmp_path):
 
 
 def test_ticks_use_the_small_tool_set(tmp_path):
-    from muse_replay.agent import LIVE_TICK_TOOLS, WATCH_PROMPT
+    from coach.agent import LIVE_TICK_TOOLS, WATCH_PROMPT
     t = Scripted([msg("quiet", rid="r1"), msg("ok", rid="r2")])
     agent = make_agent(tmp_path, t)
     agent.turn(WATCH_PROMPT)

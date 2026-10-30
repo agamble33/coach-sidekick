@@ -1,11 +1,11 @@
 """Command line entry point.
 
-python -m muse_replay health
-python -m muse_replay ingest VIDEO --out DIR [--every 2] [--max 120] [--width 768]
-python -m muse_replay clips VIDEO --out DIR [--top 5] [--pre 4] [--post 4] [--scene 0.3]
-python -m muse_replay transcribe AUDIO [--mode ENDPOINTING] [--keyword Coach ...]
-python -m muse_replay coach "what should we do?" [--context "..."] [--speak]
-python -m muse_replay play "clip the best moment" --video match.mp4 [--work DIR] [--speak]
+python -m coach health
+python -m coach ingest VIDEO --out DIR [--every 2] [--max 120] [--width 768]
+python -m coach clips VIDEO --out DIR [--top 5] [--pre 4] [--post 4] [--scene 0.3]
+python -m coach transcribe AUDIO [--mode ENDPOINTING] [--keyword Coach ...]
+python -m coach coach "what should we do?" [--context "..."] [--speak]
+python -m coach play "clip the best moment" --video match.mp4 [--work DIR] [--speak]
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from .voice import VoiceError, speak, to_wav_24k, transcribe_file
 
 
 def _parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="muse_replay")
+    ap = argparse.ArgumentParser(prog="coach")
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("health", help="show which model providers are configured")
     ing = sub.add_parser("ingest", help="sample frames from a gameplay video")
@@ -137,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
             speak(r.text)
         print(json.dumps({"rounds": r.rounds, "input_tokens": r.input_tokens, "output_tokens": r.output_tokens}), file=sys.stderr)
         return 0
-    print("usage: python -m muse_replay {health,ingest,clips,transcribe,coach,play} ...", file=sys.stderr)
+    print("usage: python -m coach {health,ingest,clips,transcribe,coach,play} ...", file=sys.stderr)
     return 64
 
 

@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from muse_replay.memory import MatchMemory
-from muse_replay.tools import TOOLS, Session, run_tool, tool_specs
+from coach.memory import MatchMemory
+from coach.tools import TOOLS, Session, run_tool, tool_specs
 
 
 @pytest.fixture
@@ -31,8 +31,8 @@ def test_unknown_tool_and_bad_args(session):
     assert run_tool(session, "cut_clip", {"start": 0, "end": 999}).startswith("error:")
 
 def test_cut_clip_cap(tmp_path):
-    from muse_replay.ingest import VideoInfo
-    from muse_replay.tools import t_cut_clip
+    from coach.ingest import VideoInfo
+    from coach.tools import t_cut_clip
     s = Session(work_dir=tmp_path, memory=MatchMemory(tmp_path / "m.json"), video="x.mp4")
     s._info = VideoInfo("x.mp4", 600.0, 30.0, 320, 240, True)
     with pytest.raises(ValueError, match="capped at 60"):
@@ -123,7 +123,7 @@ JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64 + b"\xff\xd9"
 
 
 def test_live_feed_validates_and_keeps_latest():
-    from muse_replay.tools import LiveFeed
+    from coach.tools import LiveFeed
     f = LiveFeed(keep=2)
     assert f.latest() is None and f.age_s() is None
     with pytest.raises(ValueError):
@@ -135,7 +135,7 @@ def test_live_feed_validates_and_keeps_latest():
 
 
 def test_look_now_without_live_or_stale(tmp_path):
-    from muse_replay.tools import LiveFeed
+    from coach.tools import LiveFeed
     s = Session(work_dir=tmp_path, memory=MatchMemory(tmp_path / "m.json"))
     assert run_tool(s, "look_now", {}) == "error: live mode is off; ask the player to share their screen"
     s.live = LiveFeed(); s.live.push(JPEG, ts=0.0)          # 1970: very stale
@@ -143,7 +143,7 @@ def test_look_now_without_live_or_stale(tmp_path):
 
 
 def test_look_now_sends_latest_frame(tmp_path):
-    from muse_replay.tools import LiveFeed
+    from coach.tools import LiveFeed
     sent = {}
 
     class FakeClient:

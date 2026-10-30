@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from muse_replay.__main__ import main
-from muse_replay.clips import (
+from coach.__main__ import main
+from coach.clips import (
     cut_clip, cut_highlights, detect_audio_events, detect_scene_events, loudness_events,
 )
-from muse_replay.ingest import IngestError, probe
+from coach.ingest import IngestError, probe
 
 
 # ---- pure helper ----
