@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Coach overlay link</title>
+<style>
+  body{margin:0;padding:18px 20px;font:14px/1.4 system-ui,"Segoe UI",sans-serif;background:#0b1020;color:#e8ecf5}
+  h1{font-size:16px;margin:0 0 6px}
+  p{margin:0 0 10px;color:#b7bfd0}
+  code{color:#ffd23f}
+  input{width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid #33405e;background:#121a30;color:#fff;font-size:14px}
+  .row{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}
+  button{padding:8px 14px;border-radius:8px;border:0;background:#2a3554;color:#fff;font-weight:600;cursor:pointer}
+  button.primary{background:#0064e0}
+  #msg{font-size:12px;color:#ffd23f;margin-top:8px;min-height:16px}
+</style>
+</head>
+<body>
+  <h1>Overlay link</h1>
+  <p>Paste the Overlay link Coach shows after you go live (it looks like <code>http://127.0.0.1:8000/overlay?live=...</code>). Leave it empty for the demo layout.</p>
+  <input id="url" type="url" placeholder="http://127.0.0.1:8000/overlay?live=..." autofocus>
+  <div id="msg"></div>
+  <div class="row">
+    <button id="demo">Use demo</button>
+    <button id="save" class="primary">Save and show</button>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    window.coachLink.get().then((s) => { $("url").value = s.url || ""; });
+    async function save(url) {
+      const r = await window.coachLink.set(url);
+      if (!r.ok) { $("msg").textContent = r.error || "Could not save."; return; }
+      $("msg").textContent = r.demo ? "Showing the demo layout." : "Saved. The overlay now shows this link.";
+      setTimeout(() => window.close(), 700);
+    }
+    $("save").onclick = () => save($("url").value.trim());
+    $("demo").onclick = () => save("");
+    $("url").addEventListener("keydown", (e) => { if (e.key === "Enter") save($("url").value.trim()); });
+  </script>
+</body>
+</html>
