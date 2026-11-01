@@ -28,9 +28,10 @@ import subprocess
 import tempfile
 import threading
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -59,6 +60,77 @@ _agents: dict[str, CoachAgent] = {}
 _matches: dict[str, dict] = {}
 _live: dict[str, LiveFeed] = {}
 MAX_LIVE = 20
+
+# ---- pilot consent -------------------------------------------------------------------
+# Coach must not see the screen, hear the mic or take a match video until the player has
+# agreed to the pilot terms (web/static/terms.html). The page asks once and stores the
+# consent id; every gated request carries it in X-Coach-Consent and the server checks it
+# against the consents it has recorded, so the gate is enforced here, not only in the UI.
+CONSENT_VERSION = "pilot-2026-11-01"
+_consents: set[str] = set()
+_consents_loaded = False
+
+
+def _consent_file() -> Path:
+    return DATA / "consents.jsonl"
+
+
+def _load_consents() -> None:
+    global _consents_loaded
+    if _consents_loaded:
+        return
+    f = _consent_file()
+    if f.exists():
+        for line in f.read_text(encoding="utf-8").splitlines():
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            if rec.get("version") == CONSENT_VERSION and rec.get("consent_id"):
+                _consents.add(rec["consent_id"])
+    _consents_loaded = True
+
+
+def require_consent(x_coach_consent: str | None = Header(default=None)) -> str:
+    _load_consents()
+    if not x_coach_consent or x_coach_consent not in _consents:
+        raise HTTPException(403, "Pilot consent required: agree to the pilot terms before Coach can see or hear your game")
+    return x_coach_consent
+
+
+class ConsentIn(BaseModel):
+    version: str
+    see: bool = False
+    hear: bool = False
+    age_ok: bool = False
+
+
+@app.get("/terms")
+def terms():
+    return FileResponse(STATIC / "terms.html")
+
+
+@app.get("/api/consent/version")
+def consent_version():
+    return {"version": CONSENT_VERSION}
+
+
+@app.post("/api/consent")
+def give_consent(body: ConsentIn, user_agent: str | None = Header(default=None)):
+    if body.version != CONSENT_VERSION:
+        raise HTTPException(400, f"these terms are version {CONSENT_VERSION}; reload the page")
+    if not (body.see and body.hear and body.age_ok):
+        raise HTTPException(400, "all three boxes must be checked")
+    _load_consents()
+    cid = secrets.token_hex(12)
+    rec = {"consent_id": cid, "version": body.version, "see": True, "hear": True, "age_ok": True,
+           "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "user_agent": (user_agent or "")[:200]}
+    with _lock:
+        DATA.mkdir(parents=True, exist_ok=True)
+        with _consent_file().open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+        _consents.add(cid)
+    return {"consent_id": cid, "version": body.version}
 
 
 def _client_factory() -> MetaClient:
@@ -115,7 +187,7 @@ def health():
 
 
 @app.post("/api/match")
-async def upload_match(file: UploadFile = File(...)):
+async def upload_match(file: UploadFile = File(...), consent: str = Depends(require_consent)):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in VIDEO_SUFFIXES:
         raise HTTPException(400, f"unsupported file type; use one of {sorted(VIDEO_SUFFIXES)}")
@@ -211,7 +283,7 @@ def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
 
 
 @app.post("/api/live/start")
-def live_start():
+def live_start(consent: str = Depends(require_consent)):
     with _lock:
         if len(_live) >= MAX_LIVE:
             oldest = min(_live, key=lambda k: _live[k].started)
@@ -286,7 +358,7 @@ def turn(body: TurnIn):
 
 
 @app.post("/api/transcribe")
-async def transcribe(file: UploadFile = File(...)):
+async def transcribe(file: UploadFile = File(...), consent: str = Depends(require_consent)):
     data = await file.read()
     if len(data) > MAX_AUDIO:
         raise HTTPException(413, "audio is larger than 25 MB")

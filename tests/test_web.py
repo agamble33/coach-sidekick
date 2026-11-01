@@ -29,7 +29,12 @@ def client(tmp_path, monkeypatch):
 
     webapp.app.state.client_factory = lambda: FakeMeta()
     webapp.app.state.transcribe = lambda c, wav, mode, kw: Transcript("push left", 1200, (), "s")
-    return TestClient(webapp.app), webapp
+    tc = TestClient(webapp.app)
+    # every test runs as a player who already agreed to the pilot terms; test_consent_gate
+    # drops the header to prove the server refuses without it
+    cid = tc.post("/api/consent", json={"version": webapp.CONSENT_VERSION, "see": True, "hear": True, "age_ok": True}).json()["consent_id"]
+    tc.headers["X-Coach-Consent"] = cid
+    return tc, webapp
 
 
 def test_index_and_health(client):
@@ -282,3 +287,35 @@ def test_turn_done_event_carries_record_id(client, monkeypatch):
     r = c.post("/api/turn", json={"text": "where?"})
     done = [json.loads(b.split("\n")[1][6:]) for b in r.text.strip().split("\n\n") if b.startswith("event: done")][0]
     assert done["record_id"] and webapp.app.state.annotations.get(done["record_id"]).player_text == "where?"
+
+
+def test_consent_gate(client, tmp_path):
+    c, webapp = client
+    v = webapp.CONSENT_VERSION
+    assert c.get("/api/consent/version").json() == {"version": v}
+    t = c.get("/terms")
+    assert t.status_code == 200 and "pilot" in t.text.lower() and "18 or older" in t.text
+    # the three capture endpoints refuse without a consent id, or with an unknown one
+    for hdr in ({}, {"X-Coach-Consent": "not-a-real-id"}):
+        bare = TestClient(webapp.app)
+        bare.headers.update(hdr)
+        assert bare.post("/api/live/start").status_code == 403
+        assert bare.post("/api/transcribe", files={"file": ("s.webm", b"x" * 10, "audio/webm")}).status_code == 403
+        assert bare.post("/api/match", files={"file": ("m.mp4", b"x" * 10, "video/mp4")}).status_code == 403
+    # consent must be the current version with all three boxes
+    assert c.post("/api/consent", json={"version": "old", "see": True, "hear": True, "age_ok": True}).status_code == 400
+    assert c.post("/api/consent", json={"version": v, "see": True, "hear": False, "age_ok": True}).status_code == 400
+    r = c.post("/api/consent", json={"version": v, "see": True, "hear": True, "age_ok": True})
+    assert r.status_code == 200 and r.json()["version"] == v
+    cid = r.json()["consent_id"]
+    fresh = TestClient(webapp.app)
+    fresh.headers["X-Coach-Consent"] = cid
+    assert fresh.post("/api/live/start").status_code == 200
+    # consents are written to disk and survive a restart of the app module
+    lines = (tmp_path / "data" / "consents.jsonl").read_text().splitlines()
+    recs = [json.loads(l) for l in lines]
+    assert any(x["consent_id"] == cid and x["version"] == v and x["see"] and x["hear"] and x["age_ok"] for x in recs)
+    webapp._consents.clear(); webapp._consents_loaded = False
+    assert fresh.post("/api/live/start").status_code == 200
+    # the sample match captures nothing from the player, so it stays open
+    assert TestClient(webapp.app).post("/api/match/sample").status_code == 200

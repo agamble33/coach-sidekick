@@ -141,6 +141,12 @@
   .step .t .k{font-family:var(--mono);font-weight:500;font-size:12.5px;background:var(--surface);padding:1px 7px;border-radius:6px}
   .step .t .spin{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:rot .8s linear infinite}
   @keyframes rot{to{transform:rotate(360deg)}}
+  .consent{position:fixed;inset:0;background:rgba(5,8,18,.78);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .consent[hidden]{display:none}
+  .consent .sheet{background:var(--card,#121a30);color:var(--text,#e8ecf5);border:1px solid rgba(255,255,255,.1);border-radius:16px;max-width:560px;width:100%;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .consent h2{margin:0 0 6px;font-size:21px}.consent p{margin:6px 0 12px;color:var(--text-2,#9aa6c0);font-size:14px}
+  .consent label.ck{display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14.5px;cursor:pointer}.consent label.ck input{margin-top:3px;flex:none}
+  .consent .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}.consent .err{color:#ff9b9b;font-size:13px;margin-top:8px;min-height:1em}
   .step .t .ok{color:var(--green)}
   .step .a,.step .o{margin-top:4px;color:var(--text-2);font-family:var(--mono);font-size:12px;white-space:pre-wrap;word-break:break-all}
   .step .o{color:var(--text);border-top:.8px solid var(--border);padding-top:4px}
@@ -224,6 +230,7 @@
         <div><h2><span class="livedot"></span>Live: Coach is watching your game</h2><p class="sub" id="liveInfo" style="margin:0">Sharing your screen. A frame goes to Coach every few seconds.</p></div>
         <div class="row">
           <label class="toggle" title="Coach looks on its own and calls out only when something matters"><input id="autowatch" type="checkbox" checked> Auto callouts</label>
+          <button id="cornerbtn" class="btn secondary" title="A small window with Coach that stays on top of your game">Corner mode</button>
           <button id="stoplive" class="btn secondary">Stop sharing</button>
         </div>
       </div>
@@ -364,9 +371,21 @@
     <div class="foot">
       <label class="toggle"><input id="voice" type="checkbox" checked> Coach speaks replies</label>
       <span id="usage"></span>
+      <span style="margin-left:auto;font-size:12px"><a href="/terms" target="_blank" rel="noopener">Pilot terms</a> &middot; <a href="#" id="resetConsent" title="Coach will ask you to agree again before it sees or hears anything">Reset consent</a></span>
     </div>
   </aside>
 </main>
+<div class="consent" id="consent" hidden role="dialog" aria-modal="true" aria-labelledby="consentTitle">
+  <div class="sheet">
+    <h2 id="consentTitle">Before Coach can see or hear your game</h2>
+    <p>Coach is in a private pilot. While you are live it takes a picture of your shared screen every few seconds, and it records your voice only while you hold the mic. Both go to the Coach server and to Meta's AI service. Coach keeps them to get better. <a href="/terms" target="_blank" rel="noopener">Read the pilot terms</a>.</p>
+    <label class="ck"><input type="checkbox" id="ck_see"> <span><b>Coach may see my game.</b> Screen pictures and any match video I load are sent to Coach and Meta's AI service.</span></label>
+    <label class="ck"><input type="checkbox" id="ck_hear"> <span><b>Coach may hear me.</b> My voice is recorded only while I hold the mic, and sent to be transcribed.</span></label>
+    <label class="ck"><input type="checkbox" id="ck_age"> <span><b>I am 18 or older</b>, I have read the pilot terms, and I will only share what is mine to share.</span></label>
+    <div class="err" id="consentErr"></div>
+    <div class="acts"><button class="btn secondary" id="consentNo">Not now</button><button class="btn" id="consentYes">I agree</button></div>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -376,7 +395,7 @@
   // ---------- helpers ----------
   const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
   const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  function add(cls, html){ const d=document.createElement('div'); d.className=cls; d.innerHTML=html; $('feed').appendChild(d); $('feed').scrollTop=$('feed').scrollHeight; return d; }
+  function add(cls, html){ const d=document.createElement('div'); d.className=cls; d.innerHTML=html; $('feed').appendChild(d); $('feed').scrollTop=$('feed').scrollHeight; if(cls.includes('from-coach')) cornerSync(d.innerText); return d; }
   const UP='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>';
   const DOWN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>';
   function rater(rid){
@@ -434,7 +453,7 @@
   async function upload(file){
     $('upmsg').textContent=`Uploading ${file.name}…`;
     const fd=new FormData(); fd.append('file',file);
-    try{ const r=await fetch('/api/match',{method:'POST',body:fd}); const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+    try{ const r=await fetch('/api/match',{method:'POST',body:fd,headers:consentHeaders()}); const j=await r.json(); if(r.status===403) consentLost(); if(!r.ok) throw new Error(j.detail||r.status);
       showMatch(j); add('msg from-coach',`Got it, ${esc(j.name)} is loaded. ${j.moments.length} moments on the timeline. What do you want to look at?`); }
     catch(e){ $('upmsg').textContent='Could not load: '+e.message; }
   }
@@ -481,19 +500,87 @@
   $('tips').addEventListener('click',e=>{ const t=e.target.closest('.tip'); if(t) send(t.dataset.t); });
   function tipsMode(m){ [...document.querySelectorAll('.tip[data-mode]')].forEach(t=>{ t.hidden = t.dataset.mode!==m; }); }
 
+  // ---------- pilot consent gate ----------
+  // The server refuses /api/match, /api/live/start and /api/transcribe without a consent id
+  // (X-Coach-Consent). ensureConsent() shows the sheet once, records the consent and keeps the
+  // id in localStorage keyed by terms version; a 403 later clears it and asks again.
+  const CONSENT_KEY='coachConsent';
+  let consentVersion=null, consentResolve=null;
+  function storedConsent(){ try{ const c=JSON.parse(localStorage.getItem(CONSENT_KEY)||'null'); return (c && consentVersion && c.version===consentVersion) ? c : null; }catch(e){ return null; } }
+  function clearConsent(){ try{ localStorage.removeItem(CONSENT_KEY); }catch(e){} }
+  function consentHeaders(){ const c=storedConsent(); return c ? {'X-Coach-Consent': c.id} : {}; }
+  async function ensureConsent(){
+    if(!consentVersion){ try{ consentVersion=(await (await fetch('/api/consent/version')).json()).version; }catch(e){ add('msg err','Coach server is not reachable.'); return false; } }
+    if(storedConsent()) return true;
+    $('consent').hidden=false; $('consentErr').textContent='';
+    return new Promise(res=>{ consentResolve=res; });
+  }
+  function closeConsent(ok){ $('consent').hidden=true; const r=consentResolve; consentResolve=null; if(r) r(ok); }
+  $('consentNo').onclick=()=>closeConsent(false);
+  $('consentYes').onclick=async()=>{
+    const see=$('ck_see').checked, hear=$('ck_hear').checked, age=$('ck_age').checked;
+    if(!(see&&hear&&age)){ $('consentErr').textContent='Please check all three boxes, or click Not now.'; return; }
+    try{ const r=await fetch('/api/consent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:consentVersion,see,hear,age_ok:age})});
+      const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+      try{ localStorage.setItem(CONSENT_KEY, JSON.stringify({id:j.consent_id, version:j.version, at:Date.now()})); }catch(e){}
+      add('msg from-coach','Thanks. Coach can now see your game while you share and hear you while you hold the mic.');
+      closeConsent(true);
+    }catch(e){ $('consentErr').textContent='Could not record consent: '+e.message; }
+  };
+  $('resetConsent').onclick=e=>{ e.preventDefault(); clearConsent(); if(state.live) stopLive(); add('msg from-coach','Consent reset. Coach will ask you to agree again before it sees or hears anything.'); };
+  function consentLost(){ clearConsent(); add('msg err','Coach needs your consent again before it can see or hear your game.'); }
+  // the two "Load a match video" labels open the file picker directly; ask first
+  document.querySelectorAll('label[for="file"]').forEach(l=>l.addEventListener('click', async e=>{ e.preventDefault(); if(await ensureConsent()) $('file').click(); }));
+
+  // ---------- corner mode: a small always-on-top Coach window over the game ----------
+  // Chrome's document picture-in-picture window stays above other windows (and above a
+  // borderless-fullscreen game); other browsers get a plain small popup instead.
+  let corner=null;
+  const CORNER_CSS=`body{margin:0;font:13.5px/1.35 system-ui,Segoe UI,sans-serif;background:#0b1020;color:#e8ecf5;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+    .top{display:flex;align-items:center;gap:8px;padding:9px 10px 6px}.av{width:26px;height:26px;border-radius:50%;background:#0064e0;color:#fff;font-weight:800;display:grid;place-items:center;font-size:13px}
+    .dot{width:9px;height:9px;border-radius:50%;background:#777;margin-left:auto}.dot.live{background:#ff4d4d;animation:p 1.4s infinite}@keyframes p{0%{box-shadow:0 0 0 0 rgba(255,77,77,.5)}100%{box-shadow:0 0 0 8px rgba(255,77,77,0)}}
+    .st{font-size:11.5px;color:#9aa6c0}.last{flex:1;padding:0 10px;font-size:14px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+    .bar{display:flex;gap:6px;padding:7px 10px 9px}button{flex:1;border:0;border-radius:8px;padding:7px;background:#1b2440;color:#e8ecf5;cursor:pointer;font-weight:600}button.stop{background:#3a1d24;color:#ffb3b3}`;
+  const CORNER_HTML=`<div class="top"><div class="av">C</div><div><b>Coach</b><div class="st" id="cstate">Not live</div></div><div class="dot" id="cdot"></div></div>
+    <div class="last" id="clast">Waiting for the first callout.</div>
+    <div class="bar"><button id="cask">Ask Coach</button><button id="ctalk">Talk</button><button class="stop" id="cstop">Stop</button></div>`;
+  async function openCorner(){
+    if(corner && !corner.closed){ corner.focus(); return; }
+    try{
+      if('documentPictureInPicture' in window){ corner=await documentPictureInPicture.requestWindow({width:330,height:160}); }
+      else { corner=window.open('','coachCorner','popup=yes,width=330,height=160'); if(!corner) throw new Error('pop-ups are blocked for this page'); }
+    }catch(e){ add('msg err','Corner mode could not open: '+e.message); corner=null; return; }
+    const d=corner.document; d.title='Coach';
+    const st=d.createElement('style'); st.textContent=CORNER_CSS; d.head.appendChild(st); d.body.innerHTML=CORNER_HTML;
+    d.getElementById('cask').onclick=()=>{ window.focus(); $('input').focus(); };
+    d.getElementById('ctalk').onclick=()=>{ window.focus(); $('mic').click(); };
+    d.getElementById('cstop').onclick=()=>{ stopLive(); };
+    corner.addEventListener('pagehide',()=>{ corner=null; });
+    cornerSync();
+  }
+  function cornerSync(text){
+    if(!corner || corner.closed) return;
+    const d=corner.document; if(!d.getElementById('cstate')) return;
+    d.getElementById('cstate').textContent=state.live?'Watching your game':'Not live';
+    d.getElementById('cdot').className='dot'+(state.live?' live':'');
+    if(text) d.getElementById('clast').textContent=text.replace(/\s+/g,' ').trim().slice(0,240);
+  }
+
   // ---------- live mode (screen share) ----------
   const FRAME_EVERY_MS=4000, WATCH_EVERY_MS=20000, FRAME_W=960;
   async function goLive(){
     if(state.live) return;
+    if(!await ensureConsent()) return;
     if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){ add('msg err','Screen sharing needs a secure (https) page in a desktop browser.'); return; }
     try{
       const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:5},audio:false});
-      const r=await fetch('/api/live/start',{method:'POST'}); const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+      const r=await fetch('/api/live/start',{method:'POST',headers:consentHeaders()}); const j=await r.json(); if(r.status===403){ consentLost(); } if(!r.ok) throw new Error(j.detail||r.status);
       state.live=j.live_id; state.liveStream=stream;
       const v=$('liveVideo'); v.srcObject=stream; await v.play().catch(()=>{});
       $('hero').hidden=true; $('matchCard').hidden=true; $('liveCard').hidden=false; tipsMode('live');
       stream.getVideoTracks()[0].addEventListener('ended', stopLive);
       add('msg from-coach',"I'm watching your screen. Play normally; I'll call out when something matters, or ask me anything.");
+      add('msg tip','Tip: click <b>Corner mode</b> for a small Coach window that stays on top of your game.');
       setStatus('Watching your game', true);
       state.frameTimer=setInterval(pushFrame, FRAME_EVERY_MS); pushFrame();
       state.watchTimer=setInterval(()=>{ if($('autowatch').checked && !state.busy) send('',{watch:true}); }, WATCH_EVERY_MS);
@@ -515,13 +602,14 @@
     const id=state.live; state.live=null; state.liveStream=null;
     fetch(`/api/live/${id}/stop`,{method:'POST'}).catch(()=>{});
     $('liveCard').hidden=true; if(state.match) $('matchCard').hidden=false; else $('hero').hidden=false; tipsMode('match');
-    setStatus('Ready when you are', false); add('msg from-coach','Stopped watching. Load a match or go live again whenever.');
+    setStatus('Ready when you are', false); add('msg from-coach','Stopped watching. Load a match or go live again whenever.'); cornerSync();
   }
-  $('golive').onclick=goLive; $('stoplive').onclick=stopLive;
+  $('golive').onclick=goLive; $('stoplive').onclick=stopLive; $('cornerbtn').onclick=openCorner;
 
   // ---------- mic (push to talk) ----------
   async function startRec(){
     if(state.rec) return;
+    if(!await ensureConsent()) return;
     try{ const stream=await navigator.mediaDevices.getUserMedia({audio:true});
       const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4',''].find(m=>!m||MediaRecorder.isTypeSupported(m));
       const rec=new MediaRecorder(stream, mime?{mimeType:mime}:undefined); state.chunks=[];
@@ -529,7 +617,7 @@
       rec.onstop=async()=>{ stream.getTracks().forEach(t=>t.stop()); state.rec=null; $('mic').classList.remove('on');
         const blob=new Blob(state.chunks,{type:rec.mimeType||'audio/webm'}); if(blob.size<2000){ setStatus('Too short, try again',false); return; }
         setStatus('Transcribing…', true); const fd=new FormData(); fd.append('file',blob,'speech.'+((rec.mimeType||'').includes('mp4')?'mp4':'webm'));
-        try{ const r=await fetch('/api/transcribe',{method:'POST',body:fd}); const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+        try{ const r=await fetch('/api/transcribe',{method:'POST',body:fd,headers:consentHeaders()}); const j=await r.json(); if(r.status===403) consentLost(); if(!r.ok) throw new Error(j.detail||r.status);
           if(j.transcript){ $('input').value=j.transcript; send(j.transcript); } else { setStatus("Didn't catch that",false); } }
         catch(e){ add('msg err','Transcription failed: '+e.message); setStatus('Ready when you are',false); } };
       rec.start(); state.rec=rec; $('mic').classList.add('on'); setStatus('Listening… release to send', true);
