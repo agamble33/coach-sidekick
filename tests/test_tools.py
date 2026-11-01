@@ -163,7 +163,7 @@ def test_look_now_sends_latest_frame(tmp_path):
 def test_overlay_tools(session):
     # highlight: fractions of the screen, labelled, expiring; off-screen boxes refused
     out = run_tool(session, "highlight", {"x": 0.6, "y": 0.3, "w": 0.1, "h": 0.2, "label": "  Enemy   here ", "seconds": 5})
-    assert out == "highlighted Enemy here at (0.60, 0.30) for 5s"
+    assert out == "highlighted Enemy here at (0.60, 0.30) for 8s"      # 5 requested, floor is 8
     hl = session.overlay.snapshot()["highlights"]
     assert len(hl) == 1 and hl[0]["label"] == "Enemy here" and hl[0]["x"] == 0.6
     assert run_tool(session, "highlight", {"x": 0.95, "y": 0.5, "w": 0.2}).startswith("error:")
@@ -186,3 +186,17 @@ def test_overlay_tools(session):
     run_tool(session, "callout", {"text": "Push left"})
     snap = session.overlay.snapshot()
     assert snap["callout"] == "Push left" and snap["callout_at"] > 0
+
+
+def test_highlight_clock_restarts_when_turn_ends(session, monkeypatch):
+    import time as _t
+    t0 = 1_000_000.0
+    monkeypatch.setattr(_t, "time", lambda: t0)
+    session.overlay.start_turn()
+    run_tool(session, "highlight", {"x": 0.5, "y": 0.5, "seconds": 8})
+    assert session.overlay.highlights[0]["until"] == t0 + 8
+    monkeypatch.setattr(_t, "time", lambda: t0 + 20)          # the turn took 20 s
+    assert session.overlay.snapshot()["highlights"] == []     # it would have expired...
+    session.overlay.finish_turn()
+    assert session.overlay.highlights[0]["until"] == t0 + 28  # ...so finish_turn restarts the clock
+    assert len(session.overlay.snapshot()["highlights"]) == 1

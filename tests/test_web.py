@@ -337,3 +337,13 @@ def test_overlay_page_and_state(client):
     assert again["tasks"] == demo["tasks"] and again["callout"] == demo["callout"]
     c.post(f"/api/live/{lid}/stop")
     assert c.get(f"/api/overlay/{lid}").status_code == 404
+
+
+def test_transcribe_accepts_wav_upload(client, clip, tmp_path):
+    # Regression: a .wav upload was converted onto its own path and failed with 400.
+    from coach.voice import to_wav_24k
+    c, webapp = client
+    wav = to_wav_24k(clip, tmp_path / "speech.wav")
+    webapp.app.state.transcribe = lambda cl, w, mode, kw: Transcript("hold high ground", 800, (), "s")
+    r = c.post("/api/transcribe", files={"file": ("speech.wav", wav.read_bytes(), "audio/wav")})
+    assert r.status_code == 200 and r.json()["transcript"] == "hold high ground"

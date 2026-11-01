@@ -65,6 +65,7 @@ class Overlay:
     callout: str = ""
     callout_at: float = 0.0
     updated: float = 0.0
+    turn_started: float = 0.0
 
     MAX_HIGHLIGHTS = 5
     MAX_TASKS = 6
@@ -76,11 +77,25 @@ class Overlay:
         now = time.time()
         self.highlights = [hl for hl in self.highlights if hl["until"] > now]
         hl = {"x": round(x, 4), "y": round(y, 4), "w": round(w, 4), "h": round(h, 4),
-              "label": label, "until": now + seconds}
+              "label": label, "seconds": seconds, "created": now, "until": now + seconds}
         self.highlights.append(hl)
         self.highlights = self.highlights[-self.MAX_HIGHLIGHTS:]
         self.touch()
         return hl
+
+    def start_turn(self) -> None:
+        self.turn_started = time.time()
+
+    def finish_turn(self) -> None:
+        """Re-base highlights drawn during this turn so their time starts now, when the player
+        can actually see them, not when Coach drew them mid-turn (the rest of the turn, more
+        tool calls and the reply, took longer than the box lived)."""
+        now = time.time()
+        for hl in self.highlights:
+            if hl.get("created", 0) >= self.turn_started > 0:
+                hl["until"] = now + hl.get("seconds", 8)
+        self.turn_started = 0.0
+        self.touch()
 
     def set_tasks(self, tasks: list[str]) -> None:
         self.tasks = [{"text": t, "done": False} for t in tasks[: self.MAX_TASKS]]
@@ -286,7 +301,8 @@ def t_highlight(s: Session, args: dict) -> str:
     if x + w > 1.0001 or y + h > 1.0001:
         raise ValueError("the box runs off the screen; x+w and y+h must be at most 1")
     label = " ".join(str(args.get("label", "")).split())[:40]
-    seconds = _num(args, "seconds", 6, 1, 30)
+    # floor of 8 s: Coach once asked for 5 s and the box expired before its own turn finished
+    seconds = max(8.0, _num(args, "seconds", 10, 1, 30))
     hl = s.overlay.add_highlight(x, y, w, h, label, seconds)
     where = f"({hl['x']:.2f}, {hl['y']:.2f})"
     return f"highlighted {label or 'spot'} at {where} for {seconds:g}s"
@@ -342,7 +358,7 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
          {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"},
                                            "w": {"type": "number"}, "h": {"type": "number"},
                                            "label": {"type": "string", "description": "two or three words"},
-                                           "seconds": {"type": "number", "description": "how long to show, 1 to 30"}},
+                                           "seconds": {"type": "number", "description": "how long to show, 8 to 30 (default 10)"}},
           "required": ["x", "y"], "additionalProperties": False}, t_highlight),
     Tool("set_tasks", "Replace the player's on-screen task list with the next things to do, in order (1 to 6 short lines).",
          {"type": "object", "properties": {"tasks": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 6}},

@@ -15,7 +15,8 @@ from .meta_api import MetaAPIError, MetaClient
 from .tools import Session, run_tool, tool_specs
 
 MAX_ROUNDS = 8
-LIVE_TICK_TOOLS = ["look_now", "callout", "remember", "recall"]   # what a watch/teach tick can use
+# what a watch/teach tick can use: the overlay tools are in so Coach can point and set tasks on its own
+LIVE_TICK_TOOLS = ["look_now", "callout", "highlight", "set_tasks", "task_done", "remember", "recall"]
 AGENT_SYSTEM = COACH_SYSTEM + (
     " You have tools: look_now sees the player's live screen, look sees a loaded match video at a time, "
     "find_moments and cut_clip make highlights, remember and recall are match memory, callout speaks to the "
@@ -93,6 +94,14 @@ class CoachAgent:
         return self.client.post_json("/responses", payload)
 
     def turn(self, player_text: str, tool_names: list[str] | None = None) -> TurnResult:
+        # highlights drawn mid-turn get their clock restarted when the turn ends (see Overlay)
+        self.session.overlay.start_turn()
+        try:
+            return self._turn(player_text, tool_names)
+        finally:
+            self.session.overlay.finish_turn()
+
+    def _turn(self, player_text: str, tool_names: list[str] | None = None) -> TurnResult:
         player_text = " ".join(player_text.split())[:4000]
         if not player_text:
             raise ValueError("player_text is empty")

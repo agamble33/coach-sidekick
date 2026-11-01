@@ -408,7 +408,9 @@ async def transcribe(file: UploadFile = File(...), consent: str = Depends(requir
     except MetaAPIError as exc:
         raise HTTPException(503, str(exc))
     with tempfile.TemporaryDirectory() as td:
-        src = Path(td) / ("in" + (Path(file.filename or "").suffix or ".webm"))
+        # named "upload", not "in": a .wav upload used to collide with the in.wav the converter
+        # writes, so ffmpeg clobbered its own input and every WAV upload failed with 400
+        src = Path(td) / ("upload" + (Path(file.filename or "").suffix or ".webm"))
         src.write_bytes(data)
         try:
             wav = to_wav_24k(src, Path(td) / "in.wav")
