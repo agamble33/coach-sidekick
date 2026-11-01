@@ -231,6 +231,7 @@
         <div class="row">
           <label class="toggle" title="Coach looks on its own and calls out only when something matters"><input id="autowatch" type="checkbox" checked> Auto callouts</label>
           <button id="cornerbtn" class="btn secondary" title="A small window with Coach that stays on top of your game">Corner mode</button>
+          <button id="overlaybtn" class="btn secondary" title="Transparent page with Coach's pointers and task list: add it to OBS as a browser source, or open it over the game">Overlay</button>
           <button id="stoplive" class="btn secondary">Stop sharing</button>
         </div>
       </div>
@@ -605,6 +606,13 @@
     setStatus('Ready when you are', false); add('msg from-coach','Stopped watching. Load a match or go live again whenever.'); cornerSync();
   }
   $('golive').onclick=goLive; $('stoplive').onclick=stopLive; $('cornerbtn').onclick=openCorner;
+  $('overlaybtn').onclick=async()=>{
+    if(!state.live) return;
+    const url=location.origin+'/overlay?live='+state.live;
+    try{ await navigator.clipboard.writeText(url); }catch(e){}
+    window.open(url,'coachOverlay','popup=yes,width=960,height=540');
+    add('msg tip','Overlay link copied: <code>'+esc(url)+'</code>. In OBS add it as a Browser Source sized like your game capture; Coach's highlight boxes, task list and callouts draw there. It is transparent, so it also works pinned over the game or into VR.');
+  };
 
   // ---------- mic (push to talk) ----------
   async function startRec(){

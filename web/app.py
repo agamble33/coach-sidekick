@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -312,6 +313,44 @@ def live_stop(lid: str):
         _live.pop(lid, None)
         _agents.pop(f"live:{lid}", None)
     return {"ok": True}
+
+
+# ---- overlay ---------------------------------------------------------------------------
+# The overlay page (/overlay?live=ID) draws Coach's highlight boxes, task list and last callout
+# over the game: as an OBS browser source, in Corner mode, or pinned into VR. It polls this.
+@app.get("/overlay")
+def overlay_page():
+    return FileResponse(STATIC / "overlay.html")
+
+
+def _overlay_for(lid: str):
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    agent = _agents.get(f"live:{lid}")
+    return agent.session.overlay if agent else None
+
+
+@app.get("/api/overlay/{lid}")
+def overlay_state(lid: str):
+    ov = _overlay_for(lid)
+    if ov is None:
+        return {"highlights": [], "tasks": [], "callout": "", "callout_at": 0, "updated": 0, "now": time.time()}
+    return ov.snapshot()
+
+
+@app.post("/api/overlay/{lid}/demo")
+def overlay_demo(lid: str, consent: str = Depends(require_consent)):
+    """Fill the overlay with sample content so a studio can place and size it before going live."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    agent = _agent_for(None, lid)
+    ov = agent.session.overlay
+    ov.add_highlight(0.62, 0.28, 0.14, 0.2, "Enemy here", 20)
+    ov.add_highlight(0.12, 0.66, 0.1, 0.1, "Health", 20)
+    ov.set_tasks(["Clear the courtyard", "Grab the key by the fountain", "Open the east gate"])
+    ov.task_done(1)
+    ov.say("Push left, two of them are reloading.")
+    return ov.snapshot()
 
 
 @app.post("/api/turn")

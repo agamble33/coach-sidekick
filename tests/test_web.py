@@ -319,3 +319,21 @@ def test_consent_gate(client, tmp_path):
     assert fresh.post("/api/live/start").status_code == 200
     # the sample match captures nothing from the player, so it stays open
     assert TestClient(webapp.app).post("/api/match/sample").status_code == 200
+
+
+def test_overlay_page_and_state(client):
+    c, webapp = client
+    r = c.get("/overlay")
+    assert r.status_code == 200 and "Coach overlay" in r.text
+    assert c.get("/api/overlay/nope").status_code == 404
+    lid = c.post("/api/live/start").json()["live_id"]
+    empty = c.get(f"/api/overlay/{lid}").json()
+    assert empty["highlights"] == [] and empty["tasks"] == [] and empty["callout"] == ""
+    assert TestClient(webapp.app).post(f"/api/overlay/{lid}/demo").status_code == 403   # consent-gated
+    demo = c.post(f"/api/overlay/{lid}/demo").json()
+    assert len(demo["highlights"]) == 2 and demo["highlights"][0]["label"] == "Enemy here"
+    assert [t["done"] for t in demo["tasks"]] == [True, False, False] and demo["callout"].startswith("Push left")
+    again = c.get(f"/api/overlay/{lid}").json()
+    assert again["tasks"] == demo["tasks"] and again["callout"] == demo["callout"]
+    c.post(f"/api/live/{lid}/stop")
+    assert c.get(f"/api/overlay/{lid}").status_code == 404

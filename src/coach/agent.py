@@ -19,12 +19,15 @@ LIVE_TICK_TOOLS = ["look_now", "callout", "remember", "recall"]   # what a watch
 AGENT_SYSTEM = COACH_SYSTEM + (
     " You have tools: look_now sees the player's live screen, look sees a loaded match video at a time, "
     "find_moments and cut_clip make highlights, remember and recall are match memory, callout speaks to the "
-    "player. Prefer acting over describing what you could do. After acting, reply in one or two short sentences."
+    "player. highlight draws a box on the player's screen overlay (x, y, w, h as fractions of the screen from "
+    "the top-left) to point at a thing; set_tasks and task_done keep the player's on-screen task list. "
+    "Prefer acting over describing what you could do. After acting, reply in one or two short sentences."
 )
 WATCH_PROMPT = (
     "Watch tick. Use look_now once. If something matters right now (danger, an opening, a mistake to fix, "
-    "an objective), use callout with one short line a teammate would say. If nothing matters, do not call "
-    "out. Then reply with exactly: quiet"
+    "an objective), use callout with one short line a teammate would say, and if it is at a spot on screen "
+    "also use highlight to point at it. If the player's next objectives changed, use set_tasks. If nothing "
+    "matters, do not call out. Then reply with exactly: quiet"
 )
 TEACH_PROMPT = (
     "Teach tick. The player is new to this game. Use look_now once. Compare what you see with the PLAYBOOK. "

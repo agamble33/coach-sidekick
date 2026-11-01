@@ -55,6 +55,56 @@ class LiveFeed:
 
 
 @dataclass
+class Overlay:
+    """What the overlay page draws over the game: Coach's pointers, the task list, the last callout.
+
+    Highlights are fractions of the shared frame (0..1) so the overlay page can be any size with
+    the same aspect ratio as the capture. Each highlight expires on its own."""
+    highlights: list[dict] = field(default_factory=list)
+    tasks: list[dict] = field(default_factory=list)
+    callout: str = ""
+    callout_at: float = 0.0
+    updated: float = 0.0
+
+    MAX_HIGHLIGHTS = 5
+    MAX_TASKS = 6
+
+    def touch(self) -> None:
+        self.updated = time.time()
+
+    def add_highlight(self, x: float, y: float, w: float, h: float, label: str, seconds: float) -> dict:
+        now = time.time()
+        self.highlights = [hl for hl in self.highlights if hl["until"] > now]
+        hl = {"x": round(x, 4), "y": round(y, 4), "w": round(w, 4), "h": round(h, 4),
+              "label": label, "until": now + seconds}
+        self.highlights.append(hl)
+        self.highlights = self.highlights[-self.MAX_HIGHLIGHTS:]
+        self.touch()
+        return hl
+
+    def set_tasks(self, tasks: list[str]) -> None:
+        self.tasks = [{"text": t, "done": False} for t in tasks[: self.MAX_TASKS]]
+        self.touch()
+
+    def task_done(self, index: int) -> dict:
+        if not 1 <= index <= len(self.tasks):
+            raise ValueError(f"no task {index}; there are {len(self.tasks)}")
+        self.tasks[index - 1]["done"] = True
+        self.touch()
+        return self.tasks[index - 1]
+
+    def say(self, text: str) -> None:
+        self.callout, self.callout_at = text, time.time()
+        self.touch()
+
+    def snapshot(self) -> dict:
+        now = time.time()
+        return {"highlights": [hl for hl in self.highlights if hl["until"] > now],
+                "tasks": list(self.tasks), "callout": self.callout, "callout_at": self.callout_at,
+                "updated": self.updated, "now": now}
+
+
+@dataclass
 class Session:
     """What Coach is working with right now."""
     work_dir: Path
@@ -70,6 +120,7 @@ class Session:
     annotations: AnnotationStore | None = None
     last_observation: str = ""
     last_record_id: str = ""
+    overlay: Overlay = field(default_factory=Overlay)
     _info: VideoInfo | None = None
 
     @property
@@ -223,9 +274,40 @@ def t_callout(s: Session, args: dict) -> str:
     if not text:
         raise ValueError("nothing to say")
     s.spoken.append(text)
+    s.overlay.say(text)
     s.record("callout", text)
     backend = speak(text) if s.speak_out_loud else "muted"
     return f"said ({backend}): {text}"
+
+
+def t_highlight(s: Session, args: dict) -> str:
+    x = _num(args, "x", lo=0, hi=1); y = _num(args, "y", lo=0, hi=1)
+    w = _num(args, "w", 0.12, 0.01, 1); h = _num(args, "h", 0.12, 0.01, 1)
+    if x + w > 1.0001 or y + h > 1.0001:
+        raise ValueError("the box runs off the screen; x+w and y+h must be at most 1")
+    label = " ".join(str(args.get("label", "")).split())[:40]
+    seconds = _num(args, "seconds", 6, 1, 30)
+    hl = s.overlay.add_highlight(x, y, w, h, label, seconds)
+    where = f"({hl['x']:.2f}, {hl['y']:.2f})"
+    return f"highlighted {label or 'spot'} at {where} for {seconds:g}s"
+
+
+def t_set_tasks(s: Session, args: dict) -> str:
+    raw = args.get("tasks")
+    if not isinstance(raw, list):
+        raise ValueError("tasks must be a list of short strings")
+    tasks = [" ".join(str(t).split())[:80] for t in raw]
+    tasks = [t for t in tasks if t]
+    if not tasks:
+        raise ValueError("give at least one task")
+    s.overlay.set_tasks(tasks)
+    return "tasks: " + "; ".join(f"{i}. {t}" for i, t in enumerate(tasks[:Overlay.MAX_TASKS], 1))
+
+
+def t_task_done(s: Session, args: dict) -> str:
+    idx = int(_num(args, "index", lo=1, hi=Overlay.MAX_TASKS))
+    t = s.overlay.task_done(idx)
+    return f"done: {t['text']}"
 
 
 TOOLS: dict[str, Tool] = {t.name: t for t in [
@@ -255,6 +337,19 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool("callout", "Say something to the player out loud right now, like a teammate on voice chat.",
          {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"],
           "additionalProperties": False}, t_callout),
+    Tool("highlight", "Draw a box on the player's screen overlay to point at something (an enemy, an exit, a pickup). "
+         "x, y, w, h are fractions of the screen from the top-left (0 to 1). Pair it with a callout.",
+         {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"},
+                                           "w": {"type": "number"}, "h": {"type": "number"},
+                                           "label": {"type": "string", "description": "two or three words"},
+                                           "seconds": {"type": "number", "description": "how long to show, 1 to 30"}},
+          "required": ["x", "y"], "additionalProperties": False}, t_highlight),
+    Tool("set_tasks", "Replace the player's on-screen task list with the next things to do, in order (1 to 6 short lines).",
+         {"type": "object", "properties": {"tasks": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 6}},
+          "required": ["tasks"], "additionalProperties": False}, t_set_tasks),
+    Tool("task_done", "Tick off task number index on the player's task list (1 is the first).",
+         {"type": "object", "properties": {"index": {"type": "integer", "minimum": 1, "maximum": 6}},
+          "required": ["index"], "additionalProperties": False}, t_task_done),
 ]}
 
 

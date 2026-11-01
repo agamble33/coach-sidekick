@@ -158,3 +158,31 @@ def test_look_now_sends_latest_frame(tmp_path):
     c = sent["payload"]["input"][0]["content"]
     assert c[0]["text"] == "any danger?" and c[1]["image_url"].startswith("data:image/jpeg;base64,/9j/")
     assert "look_now" in {t["name"] for t in tool_specs()}
+
+
+def test_overlay_tools(session):
+    # highlight: fractions of the screen, labelled, expiring; off-screen boxes refused
+    out = run_tool(session, "highlight", {"x": 0.6, "y": 0.3, "w": 0.1, "h": 0.2, "label": "  Enemy   here ", "seconds": 5})
+    assert out == "highlighted Enemy here at (0.60, 0.30) for 5s"
+    hl = session.overlay.snapshot()["highlights"]
+    assert len(hl) == 1 and hl[0]["label"] == "Enemy here" and hl[0]["x"] == 0.6
+    assert run_tool(session, "highlight", {"x": 0.95, "y": 0.5, "w": 0.2}).startswith("error:")
+    assert run_tool(session, "highlight", {"x": 1.5, "y": 0.5}) == "error: x must be between 0 and 1"
+    assert run_tool(session, "highlight", {"y": 0.5}) == "error: missing argument 'x'"
+    for i in range(7):
+        run_tool(session, "highlight", {"x": 0.1, "y": 0.1, "label": str(i)})
+    assert len(session.overlay.highlights) == 5          # capped, oldest dropped
+    session.overlay.highlights[0]["until"] = 0            # expired ones vanish from the snapshot
+    assert len(session.overlay.snapshot()["highlights"]) == 4
+    # tasks: replace, tick, bounds
+    assert run_tool(session, "set_tasks", {"tasks": ["Clear the yard", " Get  the key "]}) == "tasks: 1. Clear the yard; 2. Get the key"
+    assert run_tool(session, "task_done", {"index": 2}) == "done: Get the key"
+    assert [t["done"] for t in session.overlay.tasks] == [False, True]
+    assert run_tool(session, "task_done", {"index": 3}).startswith("error: no task 3")
+    assert run_tool(session, "set_tasks", {"tasks": []}) == "error: give at least one task"
+    assert run_tool(session, "set_tasks", {"tasks": "not a list"}).startswith("error:")
+    assert len(run_tool(session, "set_tasks", {"tasks": [str(i) for i in range(9)]}).split(";")) == 6
+    # a callout lands on the overlay too
+    run_tool(session, "callout", {"text": "Push left"})
+    snap = session.overlay.snapshot()
+    assert snap["callout"] == "Push left" and snap["callout_at"] > 0

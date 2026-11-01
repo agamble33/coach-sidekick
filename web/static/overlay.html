@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coach overlay</title>
+<style>
+  /* Transparent page meant to sit over the game: an OBS browser source, a Corner mode window,
+     or a window pinned into VR. Give it the same aspect ratio as the shared game capture so
+     highlight boxes (fractions of the frame) land where Coach pointed. */
+  html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:15px/1.3 system-ui,"Segoe UI",sans-serif;color:#fff}
+  #stage{position:relative;width:100%;height:100%}
+  .hl{position:absolute;border:3px solid #ffd23f;border-radius:10px;box-shadow:0 0 0 3px rgba(0,0,0,.45),0 0 18px rgba(255,210,63,.65);animation:pulse 1.2s ease-in-out infinite;pointer-events:none}
+  .hl .lbl{position:absolute;left:-3px;top:-30px;background:#ffd23f;color:#1a1400;font-weight:800;font-size:13px;padding:3px 8px;border-radius:7px;white-space:nowrap;text-shadow:none}
+  .hl.below .lbl{top:auto;bottom:-30px}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+  #callout{position:absolute;top:4%;left:50%;transform:translateX(-50%);max-width:70%;background:rgba(8,12,24,.86);border:2px solid #ffd23f;border-radius:14px;padding:10px 16px;font-size:clamp(15px,2.2vw,24px);font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,.6);opacity:0;transition:opacity .25s;pointer-events:none}
+  #callout.show{opacity:1}
+  #badge{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:7px;background:rgba(8,12,24,.75);border-radius:9999px;padding:5px 11px 5px 6px;font-size:13px;font-weight:700;pointer-events:none}
+  #badge .av{width:22px;height:22px;border-radius:50%;background:#0064e0;display:grid;place-items:center;font-size:12px}
+  #badge .dot{width:9px;height:9px;border-radius:50%;background:#777}#badge .dot.live{background:#ff4d4d;box-shadow:0 0 8px #ff4d4d}
+  #tasks{position:absolute;left:10px;bottom:10px;min-width:220px;max-width:34%;background:rgba(8,12,24,.82);border-radius:12px;padding:10px 12px;pointer-events:none}
+  #tasks[hidden]{display:none}
+  #tasks h3{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#ffd23f}
+  #tasks ol{margin:0;padding:0;list-style:none}#tasks li{display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:14.5px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+  #tasks li .bx{flex:none;width:16px;height:16px;border:2px solid #ffd23f;border-radius:4px;margin-top:2px;display:grid;place-items:center;font-size:11px;color:#1a1400}
+  #tasks li.done{opacity:.55;text-decoration:line-through}#tasks li.done .bx{background:#ffd23f}
+  #note{position:absolute;right:10px;bottom:10px;font-size:12px;color:rgba(255,255,255,.75);background:rgba(8,12,24,.6);padding:4px 8px;border-radius:8px;pointer-events:none}
+  #note[hidden]{display:none}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="badge"><span class="av">C</span>Coach<span class="dot" id="dot"></span></div>
+  <div id="callout"></div>
+  <div id="tasks" hidden><h3>Next up</h3><ol id="tasklist"></ol></div>
+  <div id="note" hidden></div>
+</div>
+<script>
+  const q=new URLSearchParams(location.search);
+  const live=q.get('live'); const demo=q.get('demo')==='1';
+  const $=id=>document.getElementById(id);
+  const CALLOUT_SHOW_S=8;
+  let lastCalloutAt=0;
+
+  function render(st){
+    const now=st.now||Date.now()/1000;
+    // highlights
+    document.querySelectorAll('.hl').forEach(e=>e.remove());
+    for(const h of st.highlights||[]){
+      const d=document.createElement('div'); d.className='hl'+(h.y<0.08?' below':'');
+      d.style.left=(h.x*100)+'%'; d.style.top=(h.y*100)+'%'; d.style.width=(h.w*100)+'%'; d.style.height=(h.h*100)+'%';
+      if(h.label){ const l=document.createElement('span'); l.className='lbl'; l.textContent=h.label; d.appendChild(l); }
+      $('stage').appendChild(d);
+    }
+    // callout banner, shown for a few seconds after Coach says it
+    const c=$('callout');
+    if(st.callout && st.callout_at && now-st.callout_at<CALLOUT_SHOW_S){ c.textContent=st.callout; c.classList.add('show'); }
+    else c.classList.remove('show');
+    // tasks
+    const tl=$('tasklist'); tl.innerHTML='';
+    for(const t of st.tasks||[]){ const li=document.createElement('li'); li.className=t.done?'done':''; li.innerHTML='<span class="bx">'+(t.done?'&#10003;':'')+'</span><span></span>'; li.lastChild.textContent=t.text; tl.appendChild(li); }
+    $('tasks').hidden=!(st.tasks&&st.tasks.length);
+    $('dot').className='dot'+(st.live?' live':'');
+  }
+
+  async function poll(){
+    try{
+      const r=await fetch('/api/overlay/'+encodeURIComponent(live),{cache:'no-store'});
+      if(r.status===404){ render({live:false}); $('note').hidden=false; $('note').textContent='Live session ended. Go live again in Coach and open the new overlay link.'; return; }
+      const st=await r.json(); st.live=true; $('note').hidden=true; render(st);
+    }catch(e){ render({live:false}); $('note').hidden=false; $('note').textContent='Coach is not reachable.'; }
+  }
+
+  if(demo){
+    const t0=Date.now()/1000;
+    render({live:true, now:t0, callout:'Push left, two of them are reloading.', callout_at:t0,
+      highlights:[{x:.62,y:.28,w:.14,h:.2,label:'Enemy here'},{x:.12,y:.66,w:.1,h:.1,label:'Health'}],
+      tasks:[{text:'Clear the courtyard',done:true},{text:'Grab the key by the fountain',done:false},{text:'Open the east gate',done:false}]});
+    $('note').hidden=false; $('note').textContent='Demo layout. Size this source to match your game capture.';
+  } else if(!live){
+    $('note').hidden=false; $('note').textContent='Open this from Coach after you go live (the Overlay button), or add ?demo=1 to see the layout.';
+  } else {
+    poll(); setInterval(poll, 1000);
+  }
+</script>
+</body>
+</html>
