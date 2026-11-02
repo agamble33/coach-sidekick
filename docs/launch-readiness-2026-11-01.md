@@ -18,7 +18,7 @@ Devpost page; the listing we found said Nov 5, 6:30 AM IST, which is Nov 4 eveni
 | Tests | Ready | 172 pass, no skips, ffmpeg required (scripts/pre-merge.sh exit 0) |
 | Gates | Ready | scripts/pre-merge.sh, scripts/predeploy.sh, scripts/check-no-dashes.sh; no GitHub Actions |
 | House rules | Ready | no em dashes in tracked text; workflow removed |
-| Docker image | Not verified today | local Docker daemon stalled during the build; Render builds the image itself; the only change since the last good image is COPY scripts |
+| Docker image | Ready (verified 2026-11-02) | `docker build` of main exit 0 (879 MB); `docker run --rm coach-sidekick:local bash scripts/predeploy.sh` exit 0 inside the image: imports ok, ffmpeg 7.1.5, no em dashes |
 | Hosted demo | Missing | render.yaml is ready (preDeployCommand, disk, health check); no Render service exists yet |
 | Demo video | Missing | script in docs/submission.md; media/ is empty |
 | Submission text | Drafted | docs/submission.md |
