@@ -65,12 +65,20 @@ Each gate ships with tests and must pass before the next one starts.
 2. Click **Use the sample match**. The timeline shows the moments Coach detected (blue = scene change, amber = loud moment).
 3. Click **Clip the biggest moment**. Watch the right panel: Coach calls `find_moments`, `cut_clip` and `remember` itself. Each step card shows the real tool call and result. The clip appears under Highlights, the note under Match memory.
 4. Click **What's happening at 15 seconds?** Coach calls `look`, sends the frame to Muse Spark, and describes it.
-5. **Go live: share my game.** Share any window (a gameplay video in another tab works). Every 20 s Coach looks and calls out only if something matters. Ask "What should I do next?" any time.
+5. **Go live: share my game.** The first time, a consent sheet asks you to agree to the pilot terms (Coach sees the shared screen and hears the mic). Share any window (a gameplay video in another tab works). Every 20 s Coach looks and calls out only if something matters, points at the spot with a highlight box, and keeps a task list. Ask "What should I do next?" any time. Click **Overlay** for the transparent page you can put over a game or into OBS, or **Corner mode** for a small always-on-top Coach window; the `desktop/` app floats the overlay over any game (docs/pc-overlay.md, docs/vr.md).
 6. **Studio playbook.** Click **Fill a sample**, **Save playbook**, turn on **New player mode**, then go live. Coach teaches from the playbook as things come up.
 7. **Rate anything** with the thumbs. Thumbs down opens a correction box; the next reply already uses it. **Export training set** writes chat-tuning JSONL.
 8. Hold the **mic** to talk instead of typing (Muse Voice Transcribe).
+9. **Safety.** Set the playbook audience to kids and go live on a game with chat: if an adult asks the child for personal details, Coach files a report with the evidence frame at `/admin/incidents` and tells the child to get a parent. Coach never acts against anyone itself.
 
 Meta models used: Muse Spark 1.3 (reasoning, tool calling, vision), Muse Voice Transcribe 1.0 (speech to text), both through the Meta Model API Responses endpoint. The hosted demo needs no login.
+
+## Gates
+
+No GitHub Actions. Two scripts carry the checks, and their exit codes are the verdict:
+
+- `scripts/pre-merge.sh` before every merge to main: the full test suite with ffmpeg required and no skips allowed, then `scripts/check-no-dashes.sh`.
+- `scripts/predeploy.sh` runs inside the built image before Render switches traffic (`preDeployCommand` in render.yaml): imports, health report, ffmpeg, no em dashes.
 
 ## Deploy (Render)
 

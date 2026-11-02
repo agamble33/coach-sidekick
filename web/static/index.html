@@ -421,7 +421,7 @@
   function speak(text){
     if(!$('voice').checked || !('speechSynthesis' in window) || !text) return;
     speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(text.replace(/\s*[—–]\s*/g,', ')); u.rate=1.05;
+    const u=new SpeechSynthesisUtterance(text.replace(/\s*[\u2014\u2013]\s*/g,', ')); u.rate=1.05;
     const v=speechSynthesis.getVoices().find(v=>/en[-_]US/i.test(v.lang) && /Natural|Premium|Enhanced|Google/i.test(v.name)) || speechSynthesis.getVoices().find(v=>/en/i.test(v.lang));
     if(v) u.voice=v; speechSynthesis.speak(u);
   }

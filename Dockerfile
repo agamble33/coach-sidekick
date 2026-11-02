@@ -1,4 +1,4 @@
-# Coach by Coach. One container: FastAPI app + ffmpeg.
+# Coach. One container: FastAPI app + ffmpeg.
 FROM python:3.12-slim
 
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ffmpeg \
@@ -8,6 +8,8 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY web ./web
+# scripts/predeploy.sh runs here as Render's preDeployCommand before traffic switches
+COPY scripts ./scripts
 RUN pip install --no-cache-dir ".[web]"
 
 # All Coach data (matches, clips, memory, playbook, annotations) lives here. Mount a disk.

@@ -13,7 +13,7 @@ REAL_RESPONSE = {
         {"type": "reasoning", "id": "rs_1", "summary": [], "status": "completed"},
         {"type": "message", "id": "msg_1", "role": "assistant", "status": "completed",
          "content": [{"type": "output_text", "annotations": [],
-                      "text": "Hey, I'm Coach, your co-op teammate — what game are we playing?"}]},
+                      "text": "Hey, I'm Coach, your co-op teammate, what game are we playing?"}]},
     ],
     "usage": {"input_tokens": 37, "output_tokens": 867,
               "output_tokens_details": {"reasoning_tokens": 842}, "total_tokens": 904},
@@ -42,7 +42,7 @@ def test_build_request_validation(kw):
 
 def test_parse_real_response():
     r = parse_reply(REAL_RESPONSE)
-    assert r == Reply("Hey, I'm Coach, your co-op teammate — what game are we playing?", 37, 867, 842)
+    assert r == Reply("Hey, I'm Coach, your co-op teammate, what game are we playing?", 37, 867, 842)
 
 
 def test_parse_joins_multiple_messages_and_skips_reasoning():

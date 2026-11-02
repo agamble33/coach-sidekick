@@ -6,6 +6,7 @@ services:
     plan: starter
     region: ohio
     healthCheckPath: /api/health
+    preDeployCommand: bash scripts/predeploy.sh
     envVars:
       - key: META_API_KEY
         sync: false            # set in the Render dashboard, never in the repo
