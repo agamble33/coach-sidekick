@@ -338,14 +338,23 @@ def _overlay_for(lid: str):
 def overlay_state(lid: str):
     ov = _overlay_for(lid)
     if ov is None:
-        return {"highlights": [], "tasks": [], "callout": "", "callout_at": 0, "hidden": False,
-                "layout": {"tasks": "bl", "callout": "top", "badge": "tl"}, "updated": 0, "now": time.time()}
-    return ov.snapshot()
+        from coach.reactions.engine import ReactionEngine
+        d = ReactionEngine(validate_assets=False).state()   # defaults before Coach's agent exists for this session
+        return {"highlights": [], "tasks": [], "callout": "", "callout_at": 0, "hidden": False, "reaction": None,
+                "layout": {"tasks": "bl", "callout": "top", "badge": "tl"}, "updated": 0, "now": time.time(),
+                "avatar_url": d["avatar_url"], "avatar_label": d["avatar_label"]}
+    snap = ov.snapshot()
+    rx = _agents[f"live:{lid}"].session.reactions
+    snap["avatar_url"], snap["avatar_label"] = rx.avatar_url(), rx.state()["avatar_label"]
+    return snap
 
 
 class OverlaySettingsIn(BaseModel):
     hidden: bool | None = None
     layout: dict | None = None
+    spice: str | None = None     # reactions: off | mild | unhinged
+    pack: str | None = None      # reactions: 3d | classic
+    avatar: str | None = None    # reactions: muse_bot | coach | dog
 
 
 @app.post("/api/overlay/{lid}/settings")
@@ -361,7 +370,44 @@ def overlay_settings(lid: str, body: OverlaySettingsIn, consent: str = Depends(r
             ov.set_layout(body.layout)
         except ValueError as exc:
             raise HTTPException(400, str(exc))
-    return {"hidden": ov.hidden, "layout": dict(ov.layout)}
+    rx = _agent_for(None, lid).session.reactions
+    try:
+        if body.spice is not None:
+            rx.set_spice(body.spice)
+        if body.pack is not None:
+            rx.set_pack(body.pack)
+        if body.avatar is not None:
+            rx.set_avatar(body.avatar)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    ov.touch()
+    return {"hidden": ov.hidden, "layout": dict(ov.layout), "spice": rx.spice, "pack": rx.pack, "avatar": rx.avatar,
+            "reactions": rx.state()}
+
+
+class ReactTestIn(BaseModel):
+    trigger: str = "missed_jump"
+
+
+@app.post("/api/overlay/{lid}/react")
+def overlay_react(lid: str, body: ReactTestIn, consent: str = Depends(require_consent)):
+    """Fire one reaction by hand (the Test button in settings). Same engine and cooldowns as Coach's react tool."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    s = _agent_for(None, lid).session
+    payload = s.reactions.fire(body.trigger, "test from settings")
+    if payload is None:
+        _, why = s.reactions.can_fire(body.trigger)
+        return {"fired": False, "reason": why}
+    s.overlay.react(payload)
+    return {"fired": True, "reaction": payload}
+
+
+@app.get("/api/reactions")
+def reactions_catalog():
+    """What the reaction feature offers (spice levels, packs, avatars, triggers) for the settings panel."""
+    from coach.reactions.engine import ReactionEngine
+    return ReactionEngine(validate_assets=False).state()
 
 
 @app.post("/api/overlay/{lid}/demo")
@@ -376,6 +422,9 @@ def overlay_demo(lid: str, consent: str = Depends(require_consent)):
     ov.set_tasks(["Clear the courtyard", "Grab the key by the fountain", "Open the east gate"])
     ov.task_done(1)
     ov.say("Push left, two of them are reloading.")
+    demo_rx = agent.session.reactions.fire("missed_jump", "demo")
+    if demo_rx:
+        ov.react(demo_rx)
     return ov.snapshot()
 
 
@@ -583,3 +632,6 @@ def index():
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+# reaction cards + sound stings (engine payloads point at /reactions/images/... and /reactions/sounds/...)
+from coach.reactions.engine import ASSETS as REACTION_ASSETS
+app.mount("/reactions", StaticFiles(directory=REACTION_ASSETS), name="reactions")

@@ -24,6 +24,7 @@ from .playbook import Playbook
 from .meta_api import MetaAPIError, MetaClient
 from .moments import MomentError, pick_clips
 from .voice import speak
+from .reactions.engine import ReactionEngine
 
 VISION_MODEL = os.environ.get("META_MODEL", "muse-spark-1.3-contributor")
 LIVE_MAX_FRAME_BYTES = 2 * 1024 * 1024
@@ -65,6 +66,7 @@ class Overlay:
     tasks: list[dict] = field(default_factory=list)
     callout: str = ""
     callout_at: float = 0.0
+    reaction: dict | None = None      # last meme reaction card (image, sound, line, ts); the page dedupes on ts
     updated: float = 0.0
     turn_started: float = 0.0
     hidden: bool = False
@@ -128,11 +130,15 @@ class Overlay:
         self.callout, self.callout_at = text, time.time()
         self.touch()
 
+    def react(self, payload: dict) -> None:
+        self.reaction = payload
+        self.touch()
+
     def snapshot(self) -> dict:
         now = time.time()
         return {"highlights": [hl for hl in self.highlights if hl["until"] > now],
                 "tasks": list(self.tasks), "callout": self.callout, "callout_at": self.callout_at,
-                "hidden": self.hidden, "layout": dict(self.layout),
+                "hidden": self.hidden, "layout": dict(self.layout), "reaction": self.reaction,
                 "updated": self.updated, "now": now}
 
 
@@ -153,6 +159,7 @@ class Session:
     last_observation: str = ""
     last_record_id: str = ""
     overlay: Overlay = field(default_factory=Overlay)
+    reactions: ReactionEngine = field(default_factory=lambda: ReactionEngine(spice="mild", pack="3d"))
     incidents: IncidentStore | None = None
     live_id: str = ""
     _info: VideoInfo | None = None
@@ -314,6 +321,20 @@ def t_callout(s: Session, args: dict) -> str:
     return f"said ({backend}): {text}"
 
 
+def t_react(s: Session, args: dict) -> str:
+    """Flash a meme reaction card + sound sting on the overlay. Cooldowns and the spice setting
+    live in the engine, so a suppressed reaction is a normal result, not an error."""
+    trigger = str(args.get("trigger", "")).strip()
+    context = " ".join(str(args.get("context", "")).split())[:200]
+    payload = s.reactions.fire(trigger, context)
+    if payload is None:
+        _, why = s.reactions.can_fire(trigger)
+        return f"no reaction ({why})"
+    s.overlay.react(payload)
+    s.record("react", f"{trigger}: {payload['line']}" + (f" ({context})" if context else ""))
+    return f"reacted {trigger}: {payload['line']}"
+
+
 def t_report_concern(s: Session, args: dict) -> str:
     """File a safety report for a human to review. Coach never acts on it itself."""
     category = str(args.get("category", "")).strip().lower()
@@ -408,6 +429,8 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
                                            "label": {"type": "string", "description": "two or three words"},
                                            "seconds": {"type": "number", "description": "how long to show, 8 to 30 (default 10)"}},
           "required": ["x", "y"], "additionalProperties": False}, t_highlight),
+    Tool("react", ReactionEngine(validate_assets=False).tool_schema()["function"]["description"],
+         ReactionEngine(validate_assets=False).tool_schema()["function"]["parameters"], t_react),
     Tool("set_tasks", "Replace the player's on-screen task list with the next things to do, in order (1 to 6 short lines).",
          {"type": "object", "properties": {"tasks": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 6}},
           "required": ["tasks"], "additionalProperties": False}, t_set_tasks),

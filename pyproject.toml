@@ -18,6 +18,11 @@ web = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "python-multipart>=0.0.9"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# reaction cards, sound stings and avatars ship inside the installed package (the Docker image
+# pip-installs the project, so anything not listed here would be missing on Render)
+"coach.reactions" = ["reactions.json", "assets/**/*.png", "assets/**/*.mp3"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]

@@ -16,12 +16,14 @@ from .tools import Session, run_tool, tool_specs
 
 MAX_ROUNDS = 8
 # what a watch/teach tick can use: the overlay tools are in so Coach can point and set tasks on its own
-LIVE_TICK_TOOLS = ["look_now", "callout", "highlight", "set_tasks", "task_done", "remember", "recall", "report_concern"]
+LIVE_TICK_TOOLS = ["look_now", "callout", "highlight", "react", "set_tasks", "task_done", "remember", "recall", "report_concern"]
 AGENT_SYSTEM = COACH_SYSTEM + (
     " You have tools: look_now sees the player's live screen, look sees a loaded match video at a time, "
     "find_moments and cut_clip make highlights, remember and recall are match memory, callout speaks to the "
     "player. highlight draws a box on the player's screen overlay (x, y, w, h as fractions of the screen from "
     "the top-left) to point at a thing; set_tasks and task_done keep the player's on-screen task list. "
+    "react flashes a meme reaction card with a sound for a moment worth a laugh (a missed jump, a dumb play, an "
+    "ignored callout, flirting mid-match, a clutch); at most one per moment, it has its own cooldowns. "
     "report_concern files a safety report for a human when you see cheating or a hack, a game-breaking bug, "
     "bullying in chat, or an adult seeking personal contact with a child; never confront anyone yourself. "
     "Prefer acting over describing what you could do. After acting, reply in one or two short sentences."
@@ -29,7 +31,9 @@ AGENT_SYSTEM = COACH_SYSTEM + (
 WATCH_PROMPT = (
     "Watch tick. Use look_now once. If something matters right now (danger, an opening, a mistake to fix, "
     "an objective), use callout with one short line a teammate would say, and if it is at a spot on screen "
-    "also use highlight to point at it. If the player's next objectives changed, use set_tasks. If you see "
+    "also use highlight to point at it. If the player just whiffed, fell, ignored your last callout, pulled off a "
+    "clutch, or is flirting instead of playing, use react once with the matching trigger. If the player's next "
+    "objectives changed, use set_tasks. If you see "
     "cheating or a hack, a game-breaking bug, bullying or harassment in on-screen chat, or an adult asking a "
     "child for personal details or to move to another app, use report_concern once with what you saw (and a "
     "short callout to the player only if they are the one at risk). If nothing matters, do not call out. Then "

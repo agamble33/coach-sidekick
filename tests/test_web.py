@@ -356,7 +356,9 @@ def test_overlay_settings_layout_and_hidden(client):
     assert st["hidden"] is False and st["layout"] == {"tasks": "bl", "callout": "top", "badge": "tl"}
     assert TestClient(webapp.app).post(f"/api/overlay/{lid}/settings", json={"hidden": True}).status_code == 403
     r = c.post(f"/api/overlay/{lid}/settings", json={"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"}})
-    assert r.status_code == 200 and r.json() == {"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"}}
+    assert r.status_code == 200 and r.json() == {"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"},
+                                                 "spice": "mild", "pack": "3d", "avatar": "muse_bot",
+                                                 "reactions": r.json()["reactions"]}
     st = c.get(f"/api/overlay/{lid}").json()
     assert st["hidden"] is True and st["layout"]["tasks"] == "tr"
     assert c.post(f"/api/overlay/{lid}/settings", json={"layout": {"tasks": "middle"}}).status_code == 400
@@ -393,3 +395,53 @@ def test_playbook_audience_round_trip_and_prompt(client):
     pb = webapp.app.state.playbooks.load()
     assert pb.audience == "kids" and "AUDIENCE: children" in pb.as_prompt() and "report_concern" in pb.as_prompt()
     assert c.get("/api/playbook").json()["playbook"]["audience"] == "kids"
+
+
+def test_reactions_assets_settings_and_demo(client):
+    c, webapp = client
+    # static assets are mounted where engine payloads point
+    assert c.get("/reactions/images/cackle.png").status_code == 200
+    assert c.get("/reactions/images/classic/horse_judge.png").status_code == 200
+    assert c.get("/reactions/sounds/womp.mp3").status_code == 200
+    lid = c.post("/api/live/start").json()["live_id"]
+    # demo fills in a reaction card alongside the highlights and tasks
+    demo = c.post(f"/api/overlay/{lid}/demo").json()
+    assert demo["reaction"] and demo["reaction"]["trigger"] == "missed_jump"
+    assert demo["reaction"]["image"] == "/reactions/images/cackle.png" and demo["reaction"]["sound"].endswith(".mp3")
+    # settings: spice and pack round-trip, bad values are 400
+    r = c.post(f"/api/overlay/{lid}/settings", json={"spice": "unhinged", "pack": "classic"})
+    assert r.status_code == 200 and r.json()["spice"] == "unhinged" and r.json()["pack"] == "classic"
+    assert c.post(f"/api/overlay/{lid}/settings", json={"spice": "nuclear"}).status_code == 400
+    assert c.post(f"/api/overlay/{lid}/settings", json={"pack": "vhs"}).status_code == 400
+    # overlay page carries the reaction card markup
+    assert 'id="reaction"' in c.get("/overlay").text
+    c.post(f"/api/live/{lid}/stop")
+
+
+def test_reactions_avatar_test_button_and_catalog(client):
+    c, webapp = client
+    cat = c.get("/api/reactions").json()
+    assert cat["avatar"] == "muse_bot" and set(cat["avatars"]) == {"muse_bot", "coach", "dog"} and "missed_jump" in cat["triggers"]
+    assert c.get("/reactions/avatars/muse_bot.png").status_code == 200
+    lid = c.post("/api/live/start").json()["live_id"]
+    # overlay state carries the avatar for the badge
+    st = c.get(f"/api/overlay/{lid}").json()
+    assert st["avatar_url"] == "/reactions/avatars/muse_bot.png" and st["avatar_label"] == "Muse Bot"
+    r = c.post(f"/api/overlay/{lid}/settings", json={"avatar": "dog"})
+    assert r.status_code == 200 and r.json()["avatar"] == "dog" and r.json()["reactions"]["avatar_label"] == "Dog"
+    assert c.get(f"/api/overlay/{lid}").json()["avatar_label"] == "Dog"
+    assert c.post(f"/api/overlay/{lid}/settings", json={"avatar": "cat"}).status_code == 400
+    # the Test button: consent-gated, fires once, then reports the cooldown calmly
+    assert TestClient(webapp.app).post(f"/api/overlay/{lid}/react", json={"trigger": "whiff"}).status_code == 403
+    r = c.post(f"/api/overlay/{lid}/react", json={"trigger": "whiff"}).json()
+    assert r["fired"] and r["reaction"]["trigger"] == "whiff" and r["reaction"]["avatar"] == "dog"
+    assert c.get(f"/api/overlay/{lid}").json()["reaction"]["trigger"] == "whiff"
+    r2 = c.post(f"/api/overlay/{lid}/react", json={"trigger": "whiff"}).json()
+    assert r2 == {"fired": False, "reason": "global cooldown"}
+    # off switch: spice off means the test button fires nothing
+    c.post(f"/api/overlay/{lid}/settings", json={"spice": "off"})
+    assert c.post(f"/api/overlay/{lid}/react", json={"trigger": "clutch"}).json()["fired"] is False
+    # settings page carries the guide
+    page = c.get("/").text
+    assert 'id="rx_on"' in page and "Meme reactions" in page and "Test reaction" in page
+    c.post(f"/api/live/{lid}/stop")

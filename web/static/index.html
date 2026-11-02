@@ -239,12 +239,20 @@
           <button id="stoplive" class="btn secondary">Stop sharing</button>
         </div>
       </div>
+      <div id="rxBar" class="row" style="margin:-4px 0 12px;padding:10px 12px;border-radius:12px;background:var(--surface)">
+        <label class="toggle" title="Coach flashes a meme card and plays a sound when you whiff a jump, do something dumb, ignore a callout, pull off a clutch, or start flirting mid-match"><input id="rx_on" type="checkbox" checked> <b>Meme reactions</b></label>
+        <label class="toggle" title="How spicy Coach gets. Mild is the normal set; Unhinged adds the wilder cards">Spice <select id="rx_spice"><option value="mild">mild</option><option value="unhinged">unhinged</option></select></label>
+        <label class="toggle" title="3D: rendered cards. Classic: the original meme look">Style <select id="rx_pack"><option value="3d">3D</option><option value="classic">classic</option></select></label>
+        <label class="toggle" title="Who Coach looks like on the overlay badge and reaction cards">Coach is <select id="rx_avatar"><option value="muse_bot">Muse Bot</option><option value="coach">Coach</option><option value="dog">Dog</option></select></label>
+        <button id="rx_test" class="btn secondary" title="Fire one reaction on the overlay so you can see and hear it">Test reaction</button>
+        <span class="chip" id="rx_hint" title="Sounds play on the overlay page. Browsers mute a page until you click it once; OBS browser sources are never muted.">Sounds play on the Overlay</span>
+      </div>
       <div class="player"><video id="liveVideo" autoplay muted playsinline></video><div class="livebadge" id="liveBadge">LIVE</div></div>
       <canvas id="grab" hidden></canvas>
     </div>
 
     <div class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>10 live · 1 on the way</span></div>
+      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>11 live · 1 on the way</span></div>
       <p class="sub">Every live feature runs on Meta models through the Model API.</p>
       <div class="feats">
         <div class="feat"><div class="fi">
@@ -277,6 +285,9 @@
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
           <b>Learns from you</b><span>Rate any callout. Good ones become examples Coach follows, corrections become ones it avoids, and the set exports as training data for Meta open-weight models.</span><em class="live">Live</em></div>
+        <div class="feat"><div class="fi">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
+          <b>Meme reactions</b><span>Whiff a jump, ignore a callout, or start flirting mid-match and Coach flashes a meme card with a sound on your overlay. Turn it on in Live mode: Meme reactions, pick a spice level, a 3D or classic style, and who Coach is (Muse Bot, Coach or Dog). Hit Test reaction to hear it.</span><em class="live">Live</em></div>
         <div class="feat soon"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
           <b>Highlight reel</b><span>Clips stitched into a shareable reel with poster frames from Muse Image.</span><em>On the way</em></div>
@@ -620,10 +631,30 @@
   (function(){ try{ const L=JSON.parse(localStorage.getItem(LAYOUT_KEY)||'null'); if(L){ for(const k of ['tasks','callout','badge']) if(L[k]) $('lay_'+k).value=L[k]; } }catch(e){} })();
   async function pushOverlaySettings(extra){
     if(!state.live) return;
-    const body=Object.assign({layout:layoutFromUI()}, extra||{});
+    const body=Object.assign({layout:layoutFromUI()}, (typeof rxFromUI==='function')?rxFromUI():{}, extra||{});
     try{ await fetch(`/api/overlay/${state.live}/settings`,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},consentHeaders()),body:JSON.stringify(body)}); }catch(e){}
   }
   for(const k of ['tasks','callout','badge']){ $('lay_'+k).onchange=()=>{ try{ localStorage.setItem(LAYOUT_KEY, JSON.stringify(layoutFromUI())); }catch(e){} pushOverlaySettings(); }; }
+
+  // ---- meme reactions: on/off, spice, style, avatar. Kept per browser, pushed with the layout. ----
+  const RX_KEY='coachReactions';
+  function rxFromUI(){ return {spice: $('rx_on').checked ? $('rx_spice').value : 'off', pack:$('rx_pack').value, avatar:$('rx_avatar').value}; }
+  (function(){ try{ const R=JSON.parse(localStorage.getItem(RX_KEY)||'null'); if(R){ $('rx_on').checked=R.spice!=='off'; if(R.spice&&R.spice!=='off') $('rx_spice').value=R.spice; if(R.pack) $('rx_pack').value=R.pack; if(R.avatar) $('rx_avatar').value=R.avatar; } }catch(e){} })();
+  function rxSync(){ $('rx_spice').disabled=!$('rx_on').checked; try{ localStorage.setItem(RX_KEY, JSON.stringify(rxFromUI())); }catch(e){} pushOverlaySettings(rxFromUI()); }
+  for(const id of ['rx_on','rx_spice','rx_pack','rx_avatar']) $(id).onchange=rxSync;
+  $('rx_spice').disabled=!$('rx_on').checked;
+  $('rx_test').onclick=async()=>{
+    if(!state.live) return;
+    if(!$('rx_on').checked){ add('msg tip','Turn on Meme reactions first.'); return; }
+    const picks=['missed_jump','dumb_play','ignored_callout','whiff','clutch','rizz_detected','slow_reaction','near_death'];
+    const trigger=picks[Math.floor(Math.random()*picks.length)];
+    try{
+      const r=await fetch(`/api/overlay/${state.live}/react`,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},consentHeaders()),body:JSON.stringify({trigger})});
+      const j=await r.json();
+      if(j.fired) add('msg tip','Reaction sent to the overlay: <b>'+esc(j.reaction.line)+'</b>. If you hear nothing, click the overlay page once (browsers mute pages until you do).');
+      else add('msg tip','No reaction right now ('+esc(j.reason)+'). Coach waits a few seconds between reactions.');
+    }catch(e){ add('msg err','Could not send the test reaction.'); }
+  };
   let overlayHidden=false;
   async function toggleOverlay(){ if(!state.live) return; overlayHidden=!overlayHidden; $('overlayhide').textContent=(overlayHidden?'Show overlay (H)':'Hide overlay (H)'); await pushOverlaySettings({hidden:overlayHidden}); }
   $('overlayhide').onclick=toggleOverlay;

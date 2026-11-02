@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "defaults": {
+    "cooldown_s": 8,
+    "global_cooldown_s": 3,
+    "show_ms": 2600,
+    "volume": 0.8
+  },
+  "spice_levels": [
+    "off",
+    "mild",
+    "unhinged"
+  ],
+  "packs": {
+    "3d": "images",
+    "classic": "images/classic"
+  },
+  "default_pack": "3d",
+  "reactions": [
+    {
+      "trigger": "missed_jump",
+      "description": "Player whiffs a jump, ledge, or platform and falls.",
+      "min_spice": "mild",
+      "image": "images/cackle.png",
+      "sound": "sounds/womp.mp3",
+      "lines": [
+        "That jump had other plans.",
+        "Gravity 1, you 0.",
+        "We don't talk about that one."
+      ]
+    },
+    {
+      "trigger": "dumb_play",
+      "description": "Player does something obviously bad: walks into fire, wastes an ult, shoots a teammate.",
+      "min_spice": "mild",
+      "image": "images/horse_judge.png",
+      "sound": "sounds/bruh.mp3",
+      "lines": [
+        "Bro.",
+        "I watched that happen in real time.",
+        "Explain the thought process."
+      ]
+    },
+    {
+      "trigger": "ignored_callout",
+      "description": "Coach gave a direction and the player did the opposite or nothing.",
+      "min_spice": "mild",
+      "image": "images/side_eye.png",
+      "sound": "sounds/scratch.mp3",
+      "lines": [
+        "I said go left.",
+        "Cool, so we're freelancing now.",
+        "Did my callout lag?"
+      ]
+    },
+    {
+      "trigger": "rizz_detected",
+      "description": "Player starts flirting or chatting someone up in voice or text mid-game.",
+      "min_spice": "mild",
+      "image": "images/rizz.png",
+      "sound": "sounds/airhorn.mp3",
+      "lines": [
+        "Rizz detected. Objective abandoned.",
+        "Smooth. The enemy team agrees.",
+        "Is this a date or a match?"
+      ]
+    },
+    {
+      "trigger": "slow_reaction",
+      "description": "Player reacts late, idles, or looks asleep at the controls.",
+      "min_spice": "mild",
+      "image": "images/sleepy_dog.png",
+      "sound": "sounds/boing.mp3",
+      "lines": [
+        "Did you get any sleep?",
+        "You good?",
+        "Wake up, we're live."
+      ]
+    },
+    {
+      "trigger": "near_death",
+      "description": "Player survives on a sliver of health or barely escapes.",
+      "min_spice": "mild",
+      "image": "images/scream.png",
+      "sound": "sounds/gasp.mp3",
+      "lines": [
+        "I aged ten years.",
+        "One HP. One.",
+        "How are you alive?"
+      ]
+    },
+    {
+      "trigger": "whiff",
+      "description": "Player misses an easy shot, swing, or pickup; a 'what was that' moment.",
+      "min_spice": "mild",
+      "image": "images/stunned_cats.png",
+      "sound": "sounds/scratch.mp3",
+      "lines": [
+        "What was that?",
+        "The target was right there.",
+        "We all saw it. Moving on."
+      ]
+    },
+    {
+      "trigger": "clutch",
+      "description": "Player pulls off a great play, clutch, or clean combo.",
+      "min_spice": "mild",
+      "image": "images/big_brain.png",
+      "sound": "sounds/dingding.mp3",
+      "lines": [
+        "Big brain.",
+        "Okay, I'm clipping that.",
+        "That's the one."
+      ]
+    },
+    {
+      "trigger": "shocked",
+      "description": "Something wild happens that nobody predicted, good or bad.",
+      "min_spice": "unhinged",
+      "image": "images/coach_selfie.png",
+      "sound": "sounds/cackle.mp3",
+      "lines": [
+        "You saw that?",
+        "No way that just happened.",
+        "Rewind. Rewind right now."
+      ]
+    }
+  ],
+  "avatars": {
+    "muse_bot": {
+      "label": "Muse Bot",
+      "image": "avatars/muse_bot.png"
+    },
+    "coach": {
+      "label": "Coach",
+      "image": "avatars/coach.png"
+    },
+    "dog": {
+      "label": "Dog",
+      "image": "avatars/dog.png"
+    }
+  },
+  "default_avatar": "muse_bot"
+}

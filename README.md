@@ -36,6 +36,7 @@ No other model, hosted or local, is called at runtime.
 | Learns from you | Every callout and reply is a record with its frame; thumbs up/down and corrections feed back into Coach's instructions and export as chat-tuning JSONL for Muse open-weight training | Live |
 | Safety reports | Coach files a report, with the evidence frame, when it sees cheating or a hack, a game-breaking bug, bullying in chat, or an adult asking a child for personal details (kids audience in the playbook). A person reviews at /admin/incidents; optional webhook alert; Coach never acts on anyone itself | Live |
 | Overlay and PC app | Highlight boxes, task list and callouts over the game (/overlay, desktop/ Electron app, OBS source, VR pin); movable panels, H or Ctrl+Shift+O to hide | Live |
+| Meme reactions | Coach flashes a meme card with a sound sting on the overlay when you whiff, ignore a callout, pull off a clutch, or start flirting mid-match. Player settings: on/off, spice, 3D or classic style, and who Coach is (Muse Bot, Coach, Dog). See docs/reactions.md | Live |
 | Highlight reel | Clips stitched into a reel with poster frames from Muse Image | On the way |
 
 ## What was built during the hackathon
@@ -58,6 +59,7 @@ Each gate ships with tests and must pass before the next one starts.
 | 7 | Studio playbook and New player mode (teach ticks) | Done |
 | 8 | Gameplay data: annotation records, ratings, learned examples, training export | Done |
 | 9 | Highlight reel with Muse Image, hosted demo | Planned |
+| 10 | Meme reactions: react tool, reaction cards and stings, player settings, avatars | Done |
 
 ## For judges: how to try Coach in 3 minutes
 
