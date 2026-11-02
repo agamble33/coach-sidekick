@@ -25,6 +25,7 @@ from .meta_api import MetaAPIError, MetaClient
 from .moments import MomentError, pick_clips
 from .voice import speak
 from .reactions.engine import ReactionEngine
+from .gamestate import GameState
 
 VISION_MODEL = os.environ.get("META_MODEL", "muse-spark-1.3-contributor")
 LIVE_MAX_FRAME_BYTES = 2 * 1024 * 1024
@@ -107,12 +108,12 @@ class Overlay:
         self.touch()
         return hl
 
-    def add_pointer(self, x: float, y: float, label: str, direction: str, seconds: float) -> dict:
+    def add_pointer(self, x: float, y: float, label: str, direction: str, seconds: float, landmark: str = "") -> dict:
         if direction not in self.DIRECTIONS:
             raise ValueError(f"direction must be one of {', '.join(self.DIRECTIONS)}")
         now = time.time()
         self.pointers = [p for p in self.pointers if p["until"] > now]
-        p = {"x": round(x, 4), "y": round(y, 4), "label": label, "direction": direction,
+        p = {"x": round(x, 4), "y": round(y, 4), "label": label, "direction": direction, "landmark": landmark,
              "seconds": seconds, "created": now, "until": now + seconds}
         self.pointers.append(p)
         self.pointers = self.pointers[-self.MAX_POINTERS:]
@@ -122,7 +123,8 @@ class Overlay:
     def set_route(self, steps: list[dict], seconds: float) -> list[dict]:
         now = time.time()
         self.route = [{"n": i + 1, "x": round(float(st["x"]), 4), "y": round(float(st["y"]), 4),
-                       "label": st.get("label", ""), "until": now + seconds, "created": now, "seconds": seconds}
+                       "label": st.get("label", ""), "landmark": st.get("landmark", ""),
+                       "until": now + seconds, "created": now, "seconds": seconds}
                       for i, st in enumerate(steps[: self.MAX_ROUTE])]
         self.touch()
         return self.route
@@ -193,6 +195,7 @@ class Session:
     last_record_id: str = ""
     overlay: Overlay = field(default_factory=Overlay)
     reactions: ReactionEngine = field(default_factory=lambda: ReactionEngine(spice="mild", pack="3d"))
+    game_state: GameState = field(default_factory=GameState)   # Gate 12: what an SDK-integrated game reports
     incidents: IncidentStore | None = None
     live_id: str = ""
     _info: VideoInfo | None = None
@@ -405,15 +408,40 @@ def t_highlight(s: Session, args: dict) -> str:
 GUIDE_OFF = "guide mode is off: the player has not turned on Guide me, so do not point; use callout instead"
 
 
+def _resolve_landmark(s: Session, args: dict) -> tuple[dict, str]:
+    """If the model named a landmark the game reported, fill x, y, direction and label from it."""
+    lid = " ".join(str(args.get("landmark", "")).split())
+    if not lid:
+        return args, ""
+    lm = s.game_state.landmark(lid)
+    if lm is None:
+        known = ", ".join(list(s.game_state.landmarks)[:12]) or "none reported by the game"
+        raise ValueError(f"unknown landmark {lid!r}; known: {known}")
+    out = dict(args)
+    out.setdefault("label", lm.label)
+    if lm.visible and lm.screen:
+        out["x"], out["y"], out["direction"] = lm.screen[0], lm.screen[1], "here"
+    else:
+        d = lm.dir if lm.dir in Overlay.DIRECTIONS else "ahead"
+        edge = {"left": (0.06, 0.5), "right": (0.94, 0.5), "up": (0.5, 0.1), "down": (0.5, 0.9),
+                "behind": (0.5, 0.14), "ahead": (0.5, 0.2)}[d]
+        out["x"], out["y"] = edge
+        out["direction"] = "behind" if d == "ahead" else d
+        if d == "ahead":
+            out["direction"] = "up"
+    return out, lm.id
+
+
 def t_point(s: Session, args: dict) -> str:
     """Draw an arrow at a screen spot (or at the screen edge toward something off screen)."""
     if not s.overlay.guide:
         return GUIDE_OFF
+    args, landmark = _resolve_landmark(s, args)
     x = _num(args, "x", lo=0, hi=1); y = _num(args, "y", lo=0, hi=1)
     label = " ".join(str(args.get("label", "")).split())[:40]
     direction = str(args.get("direction", "here")).strip().lower() or "here"
     seconds = max(8.0, _num(args, "seconds", 12, 1, 60))
-    p = s.overlay.add_pointer(x, y, label, direction, seconds)
+    p = s.overlay.add_pointer(x, y, label, direction, seconds, landmark)
     where = "here" if direction == "here" else f"off screen, {direction}"
     s.record("callout", f"[point] {label or 'go'} {where}")
     return f"pointed {label or 'there'} ({where}) at ({p['x']:.2f}, {p['y']:.2f}) for {seconds:g}s"
@@ -430,8 +458,9 @@ def t_route(s: Session, args: dict) -> str:
     for st in raw[: Overlay.MAX_ROUTE]:
         if not isinstance(st, dict):
             raise ValueError("each step must be an object with x, y, label")
+        st, landmark = _resolve_landmark(s, st)
         steps.append({"x": _num(st, "x", lo=0, hi=1), "y": _num(st, "y", lo=0, hi=1),
-                      "label": " ".join(str(st.get("label", "")).split())[:30]})
+                      "label": " ".join(str(st.get("label", "")).split())[:30], "landmark": landmark})
     seconds = max(10.0, _num(args, "seconds", 20, 1, 90))
     route = s.overlay.set_route(steps, seconds)
     s.record("callout", "[route] " + " > ".join(w["label"] or f"step {w['n']}" for w in route))
@@ -506,12 +535,14 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
                                            "label": {"type": "string", "description": "two or three words, e.g. 'Exit' or 'Health'"},
                                            "direction": {"type": "string", "enum": list(Overlay.DIRECTIONS),
                                                          "description": "here if the spot is on screen, else which way to turn"},
+                                           "landmark": {"type": "string", "description": "id of a landmark from GAME STATE; then x, y may be 0 and are filled in"},
                                            "seconds": {"type": "number", "description": "how long to show, 8 to 60 (default 12)"}},
           "required": ["x", "y"], "additionalProperties": False}, t_point),
     Tool("route", "Guide me only. Draw numbered waypoints the player should follow in order (2 to 6), each with x, y "
          "fractions of the screen and a short label. Use for 'how do I get to X' with several steps.",
          {"type": "object", "properties": {"steps": {"type": "array", "minItems": 1, "maxItems": 6, "items": {
-             "type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "label": {"type": "string"}},
+             "type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "label": {"type": "string"},
+                                              "landmark": {"type": "string", "description": "landmark id from GAME STATE"}},
              "required": ["x", "y"], "additionalProperties": False}},
                                            "seconds": {"type": "number", "description": "10 to 90 (default 20)"}},
           "required": ["steps"], "additionalProperties": False}, t_route),

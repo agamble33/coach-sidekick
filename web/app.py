@@ -36,6 +36,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from coach.gamestate import GameState
 from pydantic import BaseModel, Field
 
 from coach.agent import TEACH_PROMPT, WATCH_PROMPT, CoachAgent
@@ -425,6 +426,51 @@ def overlay_point(lid: str, body: PointTestIn, consent: str = Depends(require_co
     s = _agent_for(None, lid).session
     out = run_tool(s, "point", {"x": body.x, "y": body.y, "label": body.label, "direction": body.direction})
     return {"ok": out.startswith("pointed"), "result": out, "overlay": s.overlay.snapshot()}
+
+
+# ---- Gate 12: Game SDK. A game that integrates Coach posts its state here and reads directives back. ----
+
+@app.post("/api/game/{lid}/state")
+def game_state_in(lid: str, body: dict, consent: str = Depends(require_consent)):
+    """The game reports player, objective, landmarks and events (see docs/game-sdk.md).
+    Events that match a reaction trigger fire the meme reaction directly, no model call."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    s = _agent_for(None, lid).session
+    try:
+        triggers = s.game_state.update(body)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    fired = []
+    for t in triggers:
+        payload = s.reactions.fire(t, "game event")
+        if payload:
+            s.overlay.react(payload)
+            fired.append(t)
+    return {"ok": True, "posts": s.game_state.posts, "landmarks": len(s.game_state.landmarks), "reactions_fired": fired,
+            "fresh": s.game_state.fresh()}
+
+
+@app.get("/api/game/{lid}/directives")
+def game_directives(lid: str):
+    """Everything the game should draw or say: the overlay snapshot (callout, tasks, pointers and route with
+    landmark ids, reaction) plus what Coach currently knows about the game. Poll every 0.5 to 1 s."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    agent = _agents.get(f"live:{lid}")
+    if agent is None:
+        return {"overlay": overlay_state(lid), "game": GameState().snapshot(), "speak": ""}
+    ov = agent.session.overlay.snapshot()
+    ov["avatar_url"], ov["avatar_label"] = agent.session.reactions.avatar_url(), agent.session.reactions.state()["avatar_label"]
+    return {"overlay": ov, "game": agent.session.game_state.snapshot(), "speak": ov["callout"], "speak_at": ov["callout_at"]}
+
+
+@app.get("/api/game/{lid}/state")
+def game_state_out(lid: str):
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    agent = _agents.get(f"live:{lid}")
+    return agent.session.game_state.snapshot() if agent else GameState().snapshot()
 
 
 @app.get("/api/reactions")

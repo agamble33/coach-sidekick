@@ -474,3 +474,43 @@ def test_guide_me_settings_point_and_demo(client):
     assert 'id="routeSvg"' in page and 'id="guideTag"' in page
     assert 'id="gd_on"' in c.get("/").text
     c.post(f"/api/live/{lid}/stop")
+
+
+def test_game_sdk_state_directives_and_reactions(client):
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    assert c.get(f"/api/game/{lid}/directives").status_code == 200
+    assert c.get("/api/game/nope/directives").status_code == 404
+    # consent-gated write
+    assert TestClient(webapp.app).post(f"/api/game/{lid}/state", json={"objective": "x"}).status_code == 403
+    c.post(f"/api/overlay/{lid}/settings", json={"guide": True, "spice": "mild"})
+    body = {"game": "Fake Game", "player": {"pos": [1, 0, 2], "hp": 50}, "objective": "Find the east gate key",
+            "landmarks": [{"id": "fountain", "label": "Fountain", "visible": True, "screen": [0.52, 0.55]},
+                          {"id": "east_gate", "label": "East gate", "dir": "right"}],
+            "events": [{"type": "fell", "detail": "missed the ledge"}]}
+    r = c.post(f"/api/game/{lid}/state", json=body).json()
+    assert r["ok"] and r["landmarks"] == 2 and r["reactions_fired"] == ["missed_jump"] and r["fresh"]
+    assert c.post(f"/api/game/{lid}/state", json=[1, 2]).status_code in (400, 422)
+    # the reaction fired from the event lands in the overlay for the page and the game alike
+    d = c.get(f"/api/game/{lid}/directives").json()
+    assert d["overlay"]["reaction"]["trigger"] == "missed_jump"
+    assert d["game"]["objective"] == "Find the east gate key" and set(d["game"]["landmarks"]) == {"fountain", "east_gate"}
+    # a hand-drawn arrow on a landmark carries the id so the game can draw it in the world
+    from coach.tools import run_tool
+    s = webapp._agents[f"live:{lid}"].session
+    assert run_tool(s, "point", {"x": 0, "y": 0, "landmark": "east_gate"}).startswith("pointed East gate (off screen, right)")
+    d = c.get(f"/api/game/{lid}/directives").json()
+    assert d["overlay"]["pointers"][0]["landmark"] == "east_gate"
+    assert c.get(f"/api/game/{lid}/state").json()["posts"] == 1
+    c.post(f"/api/live/{lid}/stop")
+    assert c.get(f"/api/game/{lid}/directives").status_code == 404
+
+
+def test_game_sdk_box_and_docs_present(client):
+    c, webapp = client
+    page = c.get("/").text
+    assert 'id="sdk_copy"' in page and "Game SDK" in page
+    from pathlib import Path
+    root = Path(webapp.__file__).resolve().parent.parent
+    assert (root / "docs" / "game-sdk.md").is_file()
+    assert (root / "sdk" / "unity" / "CoachClient.cs").is_file() and (root / "sdk" / "unity" / "CoachArrow.cs").is_file()

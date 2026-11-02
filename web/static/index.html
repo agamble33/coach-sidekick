@@ -250,12 +250,19 @@
         <button id="gd_test" class="btn secondary" title="Draw a sample arrow on the overlay">Test arrow</button>
         <span class="chip" id="rx_hint" title="Sounds play on the overlay page. Browsers mute a page until you click it once; OBS browser sources are never muted.">Sounds play on the Overlay</span>
       </div>
+      <div id="sdkBox" class="row" style="margin:-4px 0 12px;padding:10px 12px;border-radius:12px;background:var(--surface);gap:8px">
+        <b title="Make Coach part of your game: see docs/game-sdk.md">Game SDK</b>
+        <span class="chip">live id <code id="sdk_live" style="margin-left:6px"></code></span>
+        <span class="chip">consent id <code id="sdk_consent" style="margin-left:6px"></code></span>
+        <button id="sdk_copy" class="btn secondary" title="Copy base URL, live id and consent id for CoachClient in Unity">Copy for Unity</button>
+        <span class="sub" style="margin:0;font-size:12.5px">Paste into CoachClient. Arrows then draw inside your game at real positions.</span>
+      </div>
       <div class="player"><video id="liveVideo" autoplay muted playsinline></video><div class="livebadge" id="liveBadge">LIVE</div></div>
       <canvas id="grab" hidden></canvas>
     </div>
 
     <div class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>12 live · 1 on the way</span></div>
+      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>13 live · 1 on the way</span></div>
       <p class="sub">Every live feature runs on Meta models through the Model API.</p>
       <div class="feats">
         <div class="feat"><div class="fi">
@@ -288,6 +295,9 @@
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
           <b>Learns from you</b><span>Rate any callout. Good ones become examples Coach follows, corrections become ones it avoids, and the set exports as training data for Meta open-weight models.</span><em class="live">Live</em></div>
+        <div class="feat"><div class="fi">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg></div>
+          <b>In-game SDK</b><span>Two HTTP calls make Coach part of your game: the game sends player, objective, landmarks and events; Coach sends back arrows anchored to landmark ids, routes, callouts and reactions. Unity reference client in sdk/unity. Events fire reactions with no model call.</span><em class="live">Live</em></div>
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></div>
           <b>Guide me</b><span>Turn it on and Coach can show the way: an arrow at the spot, an edge arrow with "left" or "behind" when it's off screen, and numbered waypoints for multi-step routes. Off by default, so Coach only points when you asked it to.</span><em class="live">Live</em></div>
@@ -606,7 +616,7 @@
       add('msg tip','Tip: click <b>Corner mode</b> for a small Coach window that stays on top of your game.');
       setStatus('Watching your game', true);
       state.frameTimer=setInterval(pushFrame, FRAME_EVERY_MS); pushFrame();
-      overlayHidden=false; $('overlayhide').textContent='Hide overlay (H)'; pushOverlaySettings();
+      overlayHidden=false; $('overlayhide').textContent='Hide overlay (H)'; pushOverlaySettings(); sdkSync();
       state.watchTimer=setInterval(()=>{ if($('autowatch').checked && !state.busy) send('',{watch:true}); }, WATCH_EVERY_MS);
     }catch(e){ add('msg err','Could not start live mode: '+e.message); }
   }
@@ -670,6 +680,10 @@
       else add('msg tip','No reaction right now ('+esc(j.reason)+'). Coach waits a few seconds between reactions.');
     }catch(e){ add('msg err','Could not send the test reaction.'); }
   };
+
+  // ---- Game SDK box: the three values a game needs to join this live session ----
+  function sdkSync(){ const c=storedConsent(); $('sdk_live').textContent=state.live||''; $('sdk_consent').textContent=c?c.id:''; }
+  $('sdk_copy').onclick=async()=>{ sdkSync(); const c=storedConsent(); const txt=`baseUrl=${location.origin}\nliveId=${state.live||''}\nconsentId=${c?c.id:''}`; try{ await navigator.clipboard.writeText(txt); add('msg tip','Copied. In Unity: CoachClient > Base Url, Live Id, Consent Id. See docs/game-sdk.md.'); }catch(e){ add('msg tip','<code>'+esc(txt).replace(/\n/g,'<br>')+'</code>'); } };
   let overlayHidden=false;
   async function toggleOverlay(){ if(!state.live) return; overlayHidden=!overlayHidden; $('overlayhide').textContent=(overlayHidden?'Show overlay (H)':'Hide overlay (H)'); await pushOverlaySettings({hidden:overlayHidden}); }
   $('overlayhide').onclick=toggleOverlay;

@@ -59,6 +59,9 @@ def instructions_for(session: Session) -> str:
     text = AGENT_SYSTEM
     if session.overlay.guide:
         text += GUIDE_PROMPT
+    game = session.game_state.as_prompt()
+    if game:
+        text += "\n\n" + game
     if session.playbook is not None:
         text += "\n\n" + session.playbook.as_prompt()
         if session.teach:
