@@ -334,8 +334,30 @@ def _overlay_for(lid: str):
 def overlay_state(lid: str):
     ov = _overlay_for(lid)
     if ov is None:
-        return {"highlights": [], "tasks": [], "callout": "", "callout_at": 0, "updated": 0, "now": time.time()}
+        return {"highlights": [], "tasks": [], "callout": "", "callout_at": 0, "hidden": False,
+                "layout": {"tasks": "bl", "callout": "top", "badge": "tl"}, "updated": 0, "now": time.time()}
     return ov.snapshot()
+
+
+class OverlaySettingsIn(BaseModel):
+    hidden: bool | None = None
+    layout: dict | None = None
+
+
+@app.post("/api/overlay/{lid}/settings")
+def overlay_settings(lid: str, body: OverlaySettingsIn, consent: str = Depends(require_consent)):
+    """Hide or show the overlay (the Coach key) and move its panels off the game's own HUD."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    ov = _agent_for(None, lid).session.overlay
+    if body.hidden is not None:
+        ov.hidden = bool(body.hidden); ov.touch()
+    if body.layout is not None:
+        try:
+            ov.set_layout(body.layout)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+    return {"hidden": ov.hidden, "layout": dict(ov.layout)}
 
 
 @app.post("/api/overlay/{lid}/demo")

@@ -232,6 +232,10 @@
           <label class="toggle" title="Coach looks on its own and calls out only when something matters"><input id="autowatch" type="checkbox" checked> Auto callouts</label>
           <button id="cornerbtn" class="btn secondary" title="A small window with Coach that stays on top of your game">Corner mode</button>
           <button id="overlaybtn" class="btn secondary" title="Transparent page with Coach's pointers and task list: add it to OBS as a browser source, or open it over the game">Overlay</button>
+          <button id="overlayhide" class="btn secondary" title="Hide or show the overlay (also the H key on this page, Ctrl+Shift+O in the PC overlay app)">Hide overlay (H)</button>
+          <label class="toggle" title="Keep the task list off your game's minimap or chat">Tasks <select id="lay_tasks"><option value="bl">bottom left</option><option value="br">bottom right</option><option value="tl">top left</option><option value="tr">top right</option></select></label>
+          <label class="toggle" title="Where Coach's callout banner shows">Callout <select id="lay_callout"><option value="top">top</option><option value="bottom">bottom</option></select></label>
+          <label class="toggle" title="The small Coach badge">Badge <select id="lay_badge"><option value="tl">top left</option><option value="tr">top right</option><option value="bl">bottom left</option><option value="br">bottom right</option><option value="off">off</option></select></label>
           <button id="stoplive" class="btn secondary">Stop sharing</button>
         </div>
       </div>
@@ -584,6 +588,7 @@
       add('msg tip','Tip: click <b>Corner mode</b> for a small Coach window that stays on top of your game.');
       setStatus('Watching your game', true);
       state.frameTimer=setInterval(pushFrame, FRAME_EVERY_MS); pushFrame();
+      overlayHidden=false; $('overlayhide').textContent='Hide overlay (H)'; pushOverlaySettings();
       state.watchTimer=setInterval(()=>{ if($('autowatch').checked && !state.busy) send('',{watch:true}); }, WATCH_EVERY_MS);
     }catch(e){ add('msg err','Could not start live mode: '+e.message); }
   }
@@ -606,6 +611,22 @@
     setStatus('Ready when you are', false); add('msg from-coach','Stopped watching. Load a match or go live again whenever.'); cornerSync();
   }
   $('golive').onclick=goLive; $('stoplive').onclick=stopLive; $('cornerbtn').onclick=openCorner;
+  // ---- overlay layout and the Coach key ----
+  // The layout is kept per browser and pushed to the live session, so the overlay page, the
+  // PC app and an OBS source all place the panels the same way. H toggles the overlay.
+  const LAYOUT_KEY='coachOverlayLayout';
+  function layoutFromUI(){ return {tasks:$('lay_tasks').value, callout:$('lay_callout').value, badge:$('lay_badge').value}; }
+  (function(){ try{ const L=JSON.parse(localStorage.getItem(LAYOUT_KEY)||'null'); if(L){ for(const k of ['tasks','callout','badge']) if(L[k]) $('lay_'+k).value=L[k]; } }catch(e){} })();
+  async function pushOverlaySettings(extra){
+    if(!state.live) return;
+    const body=Object.assign({layout:layoutFromUI()}, extra||{});
+    try{ await fetch(`/api/overlay/${state.live}/settings`,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},consentHeaders()),body:JSON.stringify(body)}); }catch(e){}
+  }
+  for(const k of ['tasks','callout','badge']){ $('lay_'+k).onchange=()=>{ try{ localStorage.setItem(LAYOUT_KEY, JSON.stringify(layoutFromUI())); }catch(e){} pushOverlaySettings(); }; }
+  let overlayHidden=false;
+  async function toggleOverlay(){ if(!state.live) return; overlayHidden=!overlayHidden; $('overlayhide').textContent=(overlayHidden?'Show overlay (H)':'Hide overlay (H)'); await pushOverlaySettings({hidden:overlayHidden}); }
+  $('overlayhide').onclick=toggleOverlay;
+  addEventListener('keydown',e=>{ if((e.key==='h'||e.key==='H') && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) toggleOverlay(); });
   $('overlaybtn').onclick=async()=>{
     if(!state.live) return;
     const url=location.origin+'/overlay?live='+state.live;

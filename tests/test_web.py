@@ -347,3 +347,20 @@ def test_transcribe_accepts_wav_upload(client, clip, tmp_path):
     webapp.app.state.transcribe = lambda cl, w, mode, kw: Transcript("hold high ground", 800, (), "s")
     r = c.post("/api/transcribe", files={"file": ("speech.wav", wav.read_bytes(), "audio/wav")})
     assert r.status_code == 200 and r.json()["transcript"] == "hold high ground"
+
+
+def test_overlay_settings_layout_and_hidden(client):
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    st = c.get(f"/api/overlay/{lid}").json()
+    assert st["hidden"] is False and st["layout"] == {"tasks": "bl", "callout": "top", "badge": "tl"}
+    assert TestClient(webapp.app).post(f"/api/overlay/{lid}/settings", json={"hidden": True}).status_code == 403
+    r = c.post(f"/api/overlay/{lid}/settings", json={"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"}})
+    assert r.status_code == 200 and r.json() == {"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"}}
+    st = c.get(f"/api/overlay/{lid}").json()
+    assert st["hidden"] is True and st["layout"]["tasks"] == "tr"
+    assert c.post(f"/api/overlay/{lid}/settings", json={"layout": {"tasks": "middle"}}).status_code == 400
+    assert c.post(f"/api/overlay/{lid}/settings", json={"layout": {"minimap": "tl"}}).status_code == 400
+    assert c.post("/api/overlay/nope/settings", json={"hidden": False}).status_code == 404
+    c.post(f"/api/overlay/{lid}/settings", json={"hidden": False})
+    assert c.get(f"/api/overlay/{lid}").json()["hidden"] is False

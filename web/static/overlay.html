@@ -14,12 +14,18 @@
   .hl .lbl{position:absolute;left:-3px;top:-30px;background:#ffd23f;color:#1a1400;font-weight:800;font-size:13px;padding:3px 8px;border-radius:7px;white-space:nowrap;text-shadow:none}
   .hl.below .lbl{top:auto;bottom:-30px}
   @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+  #stage.hidden{visibility:hidden}
+  .pos-tl{top:10px;left:10px;bottom:auto;right:auto}.pos-tr{top:10px;right:10px;bottom:auto;left:auto}
+  .pos-bl{bottom:10px;left:10px;top:auto;right:auto}.pos-br{bottom:10px;right:10px;top:auto;left:auto}
+  .pos-off{display:none}
+  #callout.pos-bottom{top:auto;bottom:6%}
+  .draggable{pointer-events:auto;cursor:grab}.dragging{opacity:.7;cursor:grabbing}
   #callout{position:absolute;top:4%;left:50%;transform:translateX(-50%);max-width:70%;background:rgba(8,12,24,.86);border:2px solid #ffd23f;border-radius:14px;padding:10px 16px;font-size:clamp(15px,2.2vw,24px);font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,.6);opacity:0;transition:opacity .25s;pointer-events:none}
   #callout.show{opacity:1}
-  #badge{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:7px;background:rgba(8,12,24,.75);border-radius:9999px;padding:5px 11px 5px 6px;font-size:13px;font-weight:700;pointer-events:none}
+  #badge{position:absolute;display:flex;align-items:center;gap:7px;background:rgba(8,12,24,.75);border-radius:9999px;padding:5px 11px 5px 6px;font-size:13px;font-weight:700;pointer-events:none}
   #badge .av{width:22px;height:22px;border-radius:50%;background:#0064e0;display:grid;place-items:center;font-size:12px}
   #badge .dot{width:9px;height:9px;border-radius:50%;background:#777}#badge .dot.live{background:#ff4d4d;box-shadow:0 0 8px #ff4d4d}
-  #tasks{position:absolute;left:10px;bottom:10px;min-width:220px;max-width:34%;background:rgba(8,12,24,.82);border-radius:12px;padding:10px 12px;pointer-events:none}
+  #tasks{position:absolute;min-width:220px;max-width:34%;background:rgba(8,12,24,.82);border-radius:12px;padding:10px 12px;pointer-events:none}
   #tasks[hidden]{display:none}
   #tasks h3{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#ffd23f}
   #tasks ol{margin:0;padding:0;list-style:none}#tasks li{display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:14.5px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.7)}
@@ -41,10 +47,39 @@
   const live=q.get('live'); const demo=q.get('demo')==='1';
   const $=id=>document.getElementById(id);
   const CALLOUT_SHOW_S=8;
-  let lastCalloutAt=0;
+  // Panel positions: a drag on this page (OBS "Interact" or a normal window) wins, then what
+  // the Coach page set on the server, then ?tasks=&callout=&badge= in the link, then defaults.
+  const DEFAULT_LAYOUT={tasks:'bl',callout:'top',badge:'tl'};
+  const LKEY='coachOverlayLayout:'+(live||'demo');
+  let localLayout=null; try{ localLayout=JSON.parse(localStorage.getItem(LKEY)||'null'); }catch(e){}
+  const qLayout={}; for(const k of ['tasks','callout','badge']){ if(q.get(k)) qLayout[k]=q.get(k); }
+  function applyLayout(server){
+    const L=Object.assign({},DEFAULT_LAYOUT,qLayout,server||{},localLayout||{});
+    $('tasks').className='pos-'+L.tasks+' draggable'; $('badge').className='pos-'+L.badge+' draggable';
+    $('callout').classList.remove('pos-bottom'); if(L.callout==='bottom') $('callout').classList.add('pos-bottom');
+    return L;
+  }
+  // drag a panel; on release it snaps to the nearest corner (or top/bottom for the banner)
+  let drag=null;
+  function startDrag(e){ const el=e.currentTarget; drag={el, id:el.id}; el.classList.add('dragging'); e.preventDefault(); }
+  function moveDrag(e){ if(!drag) return; const el=drag.el; el.style.left=(e.clientX-el.offsetWidth/2)+'px'; el.style.top=(e.clientY-el.offsetHeight/2)+'px'; el.style.right='auto'; el.style.bottom='auto'; el.style.transform='none'; }
+  function endDrag(e){
+    if(!drag) return; const el=drag.el; el.classList.remove('dragging');
+    const W=innerWidth,Hh=innerHeight; const cx=e.clientX, cy=e.clientY;
+    localLayout=Object.assign({},localLayout||{});
+    if(drag.id==='callout'){ localLayout.callout = cy>Hh/2?'bottom':'top'; }
+    else { localLayout[drag.id] = (cy>Hh/2?'b':'t')+(cx>W/2?'r':'l'); }
+    try{ localStorage.setItem(LKEY, JSON.stringify(localLayout)); }catch(err){}
+    el.removeAttribute('style'); drag=null; applyLayout(lastServerLayout);
+  }
+  let lastServerLayout=null;
+  for(const id of ['tasks','badge','callout']){ $(id).addEventListener('pointerdown',startDrag); }
+  addEventListener('pointermove',moveDrag); addEventListener('pointerup',endDrag);
 
   function render(st){
     const now=st.now||Date.now()/1000;
+    lastServerLayout=st.layout||lastServerLayout; applyLayout(lastServerLayout);
+    $('stage').classList.toggle('hidden', !!st.hidden);
     // highlights
     document.querySelectorAll('.hl').forEach(e=>e.remove());
     for(const h of st.highlights||[]){
@@ -77,7 +112,7 @@
     render({live:true, now:t0, callout:'Push left, two of them are reloading.', callout_at:t0,
       highlights:[{x:.62,y:.28,w:.14,h:.2,label:'Enemy here'},{x:.12,y:.66,w:.1,h:.1,label:'Health'}],
       tasks:[{text:'Clear the courtyard',done:true},{text:'Grab the key by the fountain',done:false},{text:'Open the east gate',done:false}]});
-    $('note').hidden=false; $('note').textContent='Demo layout. Size this source to match your game capture.';
+    $('note').hidden=false; $('note').textContent='Demo layout. Size this source to match your game capture. Drag the panels to move them.';
   } else if(!live){
     $('note').hidden=false; $('note').textContent='Open this from Coach after you go live (the Overlay button), or add ?demo=1 to see the layout.';
   } else {

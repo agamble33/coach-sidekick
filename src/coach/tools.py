@@ -66,6 +66,21 @@ class Overlay:
     callout_at: float = 0.0
     updated: float = 0.0
     turn_started: float = 0.0
+    hidden: bool = False
+    # where the panels sit, so they stay off the game's own minimap and chat:
+    # tasks and badge: tl, tr, bl, br (badge also off); callout: top or bottom
+    layout: dict = field(default_factory=lambda: {"tasks": "bl", "callout": "top", "badge": "tl"})
+
+    LAYOUT_CHOICES = {"tasks": ("tl", "tr", "bl", "br"), "callout": ("top", "bottom"),
+                      "badge": ("tl", "tr", "bl", "br", "off")}
+
+    def set_layout(self, layout: dict) -> dict:
+        for k, v in (layout or {}).items():
+            if k not in self.LAYOUT_CHOICES or v not in self.LAYOUT_CHOICES[k]:
+                raise ValueError(f"bad layout {k}={v!r}")
+            self.layout[k] = v
+        self.touch()
+        return dict(self.layout)
 
     MAX_HIGHLIGHTS = 5
     MAX_TASKS = 6
@@ -116,6 +131,7 @@ class Overlay:
         now = time.time()
         return {"highlights": [hl for hl in self.highlights if hl["until"] > now],
                 "tasks": list(self.tasks), "callout": self.callout, "callout_at": self.callout_at,
+                "hidden": self.hidden, "layout": dict(self.layout),
                 "updated": self.updated, "now": now}
 
 
