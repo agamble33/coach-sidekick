@@ -357,7 +357,7 @@ def test_overlay_settings_layout_and_hidden(client):
     assert TestClient(webapp.app).post(f"/api/overlay/{lid}/settings", json={"hidden": True}).status_code == 403
     r = c.post(f"/api/overlay/{lid}/settings", json={"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"}})
     assert r.status_code == 200 and r.json() == {"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"},
-                                                 "spice": "mild", "pack": "3d", "avatar": "muse_bot",
+                                                 "spice": "mild", "pack": "3d", "avatar": "muse_bot", "guide": False,
                                                  "reactions": r.json()["reactions"]}
     st = c.get(f"/api/overlay/{lid}").json()
     assert st["hidden"] is True and st["layout"]["tasks"] == "tr"
@@ -444,4 +444,33 @@ def test_reactions_avatar_test_button_and_catalog(client):
     # settings page carries the guide
     page = c.get("/").text
     assert 'id="rx_on"' in page and "Meme reactions" in page and "Test reaction" in page
+    c.post(f"/api/live/{lid}/stop")
+
+
+def test_guide_me_settings_point_and_demo(client):
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    st = c.get(f"/api/overlay/{lid}").json()
+    assert st["guide"] is False and st["pointers"] == [] and st["route"] == []
+    # off by default: the test arrow is refused calmly
+    r = c.post(f"/api/overlay/{lid}/point", json={"label": "Go here"}).json()
+    assert r["ok"] is False and "guide mode is off" in r["result"]
+    # on: arrow lands in the overlay state; demo adds a route
+    r = c.post(f"/api/overlay/{lid}/settings", json={"guide": True})
+    assert r.status_code == 200 and r.json()["guide"] is True
+    r = c.post(f"/api/overlay/{lid}/point", json={"x": 0.72, "y": 0.4, "label": "Go here"}).json()
+    assert r["ok"] and r["overlay"]["pointers"][0]["label"] == "Go here"
+    assert c.get(f"/api/overlay/{lid}").json()["pointers"][0]["x"] == 0.72
+    demo = c.post(f"/api/overlay/{lid}/demo").json()
+    assert [w["label"] for w in demo["route"]] == ["Courtyard", "Fountain", "East gate"]
+    assert any(p["direction"] == "left" for p in demo["pointers"])
+    # consent-gated like the other overlay writes
+    assert TestClient(webapp.app).post(f"/api/overlay/{lid}/point", json={}).status_code == 403
+    # off again clears everything
+    c.post(f"/api/overlay/{lid}/settings", json={"guide": False})
+    st = c.get(f"/api/overlay/{lid}").json()
+    assert st["pointers"] == [] and st["route"] == []
+    page = c.get("/overlay").text
+    assert 'id="routeSvg"' in page and 'id="guideTag"' in page
+    assert 'id="gd_on"' in c.get("/").text
     c.post(f"/api/live/{lid}/stop")

@@ -340,7 +340,7 @@ def overlay_state(lid: str):
     if ov is None:
         from coach.reactions.engine import ReactionEngine
         d = ReactionEngine(validate_assets=False).state()   # defaults before Coach's agent exists for this session
-        return {"highlights": [], "tasks": [], "callout": "", "callout_at": 0, "hidden": False, "reaction": None,
+        return {"highlights": [], "tasks": [], "callout": "", "callout_at": 0, "hidden": False, "reaction": None, "guide": False, "pointers": [], "route": [],
                 "layout": {"tasks": "bl", "callout": "top", "badge": "tl"}, "updated": 0, "now": time.time(),
                 "avatar_url": d["avatar_url"], "avatar_label": d["avatar_label"]}
     snap = ov.snapshot()
@@ -355,6 +355,7 @@ class OverlaySettingsIn(BaseModel):
     spice: str | None = None     # reactions: off | mild | unhinged
     pack: str | None = None      # reactions: 3d | classic
     avatar: str | None = None    # reactions: muse_bot | coach | dog
+    guide: bool | None = None    # Guide me: let Coach draw arrows and routes
 
 
 @app.post("/api/overlay/{lid}/settings")
@@ -365,6 +366,11 @@ def overlay_settings(lid: str, body: OverlaySettingsIn, consent: str = Depends(r
     ov = _agent_for(None, lid).session.overlay
     if body.hidden is not None:
         ov.hidden = bool(body.hidden); ov.touch()
+    if body.guide is not None:
+        ov.guide = bool(body.guide)
+        if not ov.guide:
+            ov.clear_guidance()
+        ov.touch()
     if body.layout is not None:
         try:
             ov.set_layout(body.layout)
@@ -382,7 +388,7 @@ def overlay_settings(lid: str, body: OverlaySettingsIn, consent: str = Depends(r
         raise HTTPException(400, str(exc))
     ov.touch()
     return {"hidden": ov.hidden, "layout": dict(ov.layout), "spice": rx.spice, "pack": rx.pack, "avatar": rx.avatar,
-            "reactions": rx.state()}
+            "guide": ov.guide, "reactions": rx.state()}
 
 
 class ReactTestIn(BaseModel):
@@ -401,6 +407,24 @@ def overlay_react(lid: str, body: ReactTestIn, consent: str = Depends(require_co
         return {"fired": False, "reason": why}
     s.overlay.react(payload)
     return {"fired": True, "reaction": payload}
+
+
+class PointTestIn(BaseModel):
+    x: float = 0.72
+    y: float = 0.4
+    label: str = "Go here"
+    direction: str = "here"
+
+
+@app.post("/api/overlay/{lid}/point")
+def overlay_point(lid: str, body: PointTestIn, consent: str = Depends(require_consent)):
+    """Draw one arrow by hand (the Test arrow button). Same path as Coach's point tool, same Guide me gate."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    from coach.tools import run_tool
+    s = _agent_for(None, lid).session
+    out = run_tool(s, "point", {"x": body.x, "y": body.y, "label": body.label, "direction": body.direction})
+    return {"ok": out.startswith("pointed"), "result": out, "overlay": s.overlay.snapshot()}
 
 
 @app.get("/api/reactions")
@@ -422,6 +446,11 @@ def overlay_demo(lid: str, consent: str = Depends(require_consent)):
     ov.set_tasks(["Clear the courtyard", "Grab the key by the fountain", "Open the east gate"])
     ov.task_done(1)
     ov.say("Push left, two of them are reloading.")
+    if ov.guide:
+        ov.add_pointer(0.78, 0.42, "East gate", "here", 20)
+        ov.add_pointer(0.04, 0.5, "Key", "left", 20)
+        ov.set_route([{"x": 0.3, "y": 0.75, "label": "Courtyard"}, {"x": 0.5, "y": 0.55, "label": "Fountain"},
+                      {"x": 0.78, "y": 0.42, "label": "East gate"}], 20)
     demo_rx = agent.session.reactions.fire("missed_jump", "demo")
     if demo_rx:
         ov.react(demo_rx)

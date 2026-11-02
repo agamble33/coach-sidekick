@@ -245,6 +245,9 @@
         <label class="toggle" title="3D: rendered cards. Classic: the original meme look">Style <select id="rx_pack"><option value="3d">3D</option><option value="classic">classic</option></select></label>
         <label class="toggle" title="Who Coach looks like on the overlay badge and reaction cards">Coach is <select id="rx_avatar"><option value="muse_bot">Muse Bot</option><option value="coach">Coach</option><option value="dog">Dog</option></select></label>
         <button id="rx_test" class="btn secondary" title="Fire one reaction on the overlay so you can see and hear it">Test reaction</button>
+        <span style="width:1px;height:22px;background:var(--border)"></span>
+        <label class="toggle" title="Let Coach draw arrows and numbered routes on your overlay when you ask where to go. Off means Coach only talks."><input id="gd_on" type="checkbox"> <b>Guide me</b> (arrows)</label>
+        <button id="gd_test" class="btn secondary" title="Draw a sample arrow on the overlay">Test arrow</button>
         <span class="chip" id="rx_hint" title="Sounds play on the overlay page. Browsers mute a page until you click it once; OBS browser sources are never muted.">Sounds play on the Overlay</span>
       </div>
       <div class="player"><video id="liveVideo" autoplay muted playsinline></video><div class="livebadge" id="liveBadge">LIVE</div></div>
@@ -252,7 +255,7 @@
     </div>
 
     <div class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>11 live · 1 on the way</span></div>
+      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2>What Coach can do</h2><span class="chip"><span class="dot"></span>12 live · 1 on the way</span></div>
       <p class="sub">Every live feature runs on Meta models through the Model API.</p>
       <div class="feats">
         <div class="feat"><div class="fi">
@@ -285,6 +288,9 @@
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
           <b>Learns from you</b><span>Rate any callout. Good ones become examples Coach follows, corrections become ones it avoids, and the set exports as training data for Meta open-weight models.</span><em class="live">Live</em></div>
+        <div class="feat"><div class="fi">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></div>
+          <b>Guide me</b><span>Turn it on and Coach can show the way: an arrow at the spot, an edge arrow with "left" or "behind" when it's off screen, and numbered waypoints for multi-step routes. Off by default, so Coach only points when you asked it to.</span><em class="live">Live</em></div>
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
           <b>Meme reactions</b><span>Whiff a jump, ignore a callout, or start flirting mid-match and Coach flashes a meme card with a sound on your overlay. Turn it on in Live mode: Meme reactions, pick a spice level, a 3D or classic style, and who Coach is (Muse Bot, Coach or Dog). Hit Test reaction to hear it.</span><em class="live">Live</em></div>
@@ -638,10 +644,19 @@
 
   // ---- meme reactions: on/off, spice, style, avatar. Kept per browser, pushed with the layout. ----
   const RX_KEY='coachReactions';
-  function rxFromUI(){ return {spice: $('rx_on').checked ? $('rx_spice').value : 'off', pack:$('rx_pack').value, avatar:$('rx_avatar').value}; }
-  (function(){ try{ const R=JSON.parse(localStorage.getItem(RX_KEY)||'null'); if(R){ $('rx_on').checked=R.spice!=='off'; if(R.spice&&R.spice!=='off') $('rx_spice').value=R.spice; if(R.pack) $('rx_pack').value=R.pack; if(R.avatar) $('rx_avatar').value=R.avatar; } }catch(e){} })();
+  function rxFromUI(){ return {spice: $('rx_on').checked ? $('rx_spice').value : 'off', pack:$('rx_pack').value, avatar:$('rx_avatar').value, guide:$('gd_on').checked}; }
+  (function(){ try{ const R=JSON.parse(localStorage.getItem(RX_KEY)||'null'); if(R){ $('rx_on').checked=R.spice!=='off'; if(R.spice&&R.spice!=='off') $('rx_spice').value=R.spice; if(R.pack) $('rx_pack').value=R.pack; if(R.avatar) $('rx_avatar').value=R.avatar; $('gd_on').checked=!!R.guide; } }catch(e){} })();
   function rxSync(){ $('rx_spice').disabled=!$('rx_on').checked; try{ localStorage.setItem(RX_KEY, JSON.stringify(rxFromUI())); }catch(e){} pushOverlaySettings(rxFromUI()); }
-  for(const id of ['rx_on','rx_spice','rx_pack','rx_avatar']) $(id).onchange=rxSync;
+  for(const id of ['rx_on','rx_spice','rx_pack','rx_avatar','gd_on']) $(id).onchange=rxSync;
+  $('gd_test').onclick=async()=>{
+    if(!state.live) return;
+    if(!$('gd_on').checked){ add('msg tip','Turn on Guide me first.'); return; }
+    try{
+      const r=await fetch(`/api/overlay/${state.live}/point`,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},consentHeaders()),body:JSON.stringify({x:0.72,y:0.4,label:'Go here',direction:'here'})});
+      const j=await r.json();
+      add('msg tip', j.ok ? 'Arrow drawn on the overlay for 12 seconds. Ask Coach "where do I go?" and it will point for real.' : 'Could not draw: '+esc(j.result));
+    }catch(e){ add('msg err','Could not send the test arrow.'); }
+  };
   $('rx_spice').disabled=!$('rx_on').checked;
   $('rx_test').onclick=async()=>{
     if(!state.live) return;

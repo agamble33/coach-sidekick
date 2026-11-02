@@ -17,6 +17,7 @@ from .tools import Session, run_tool, tool_specs
 MAX_ROUNDS = 8
 # what a watch/teach tick can use: the overlay tools are in so Coach can point and set tasks on its own
 LIVE_TICK_TOOLS = ["look_now", "callout", "highlight", "react", "set_tasks", "task_done", "remember", "recall", "report_concern"]
+GUIDE_TOOLS = ["point", "route"]   # offered only while the player has Guide me on
 AGENT_SYSTEM = COACH_SYSTEM + (
     " You have tools: look_now sees the player's live screen, look sees a loaded match video at a time, "
     "find_moments and cut_clip make highlights, remember and recall are match memory, callout speaks to the "
@@ -47,8 +48,17 @@ TEACH_PROMPT = (
 )
 
 
+GUIDE_PROMPT = (
+    " Guide me is ON: the player asked you to show the way. When they ask where to go or what to do next, use point "
+    "(an arrow at a spot, or at the screen edge with a direction if it is off screen) and route (numbered waypoints) "
+    "together with a short callout. Point at one thing at a time; do not cover the screen."
+)
+
+
 def instructions_for(session: Session) -> str:
     text = AGENT_SYSTEM
+    if session.overlay.guide:
+        text += GUIDE_PROMPT
     if session.playbook is not None:
         text += "\n\n" + session.playbook.as_prompt()
         if session.teach:
@@ -92,6 +102,9 @@ class CoachAgent:
         self.last_response_id: str | None = None
         self.tools = tool_specs()
 
+    def tools_names(self) -> list[str]:
+        return [t["name"] for t in self.tools]
+
     def _request(self, input_items: list, previous: str | None, tools: list | None = None) -> dict:
         payload = {
             "model": self.model, "instructions": instructions_for(self.session), "input": input_items,
@@ -116,7 +129,9 @@ class CoachAgent:
             raise ValueError("player_text is empty")
         is_tick = player_text in (WATCH_PROMPT, TEACH_PROMPT)
         if tool_names is None and is_tick:
-            tool_names = LIVE_TICK_TOOLS
+            tool_names = LIVE_TICK_TOOLS + (GUIDE_TOOLS if self.session.overlay.guide else [])
+        elif tool_names is None and not self.session.overlay.guide:
+            tool_names = [n for n in self.tools_names() if n not in GUIDE_TOOLS]
         tools = None if tool_names is None else tool_specs(tool_names)
         result = TurnResult(text="")
         pending: list = [{"role": "user", "content": [{"type": "input_text", "text": player_text}]}]

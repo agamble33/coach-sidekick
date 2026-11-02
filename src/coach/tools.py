@@ -67,6 +67,9 @@ class Overlay:
     callout: str = ""
     callout_at: float = 0.0
     reaction: dict | None = None      # last meme reaction card (image, sound, line, ts); the page dedupes on ts
+    guide: bool = False               # Guide me: the player allowed Coach to point and draw routes
+    pointers: list[dict] = field(default_factory=list)   # arrows: where to go / what to look at
+    route: list[dict] = field(default_factory=list)      # numbered waypoints, in order
     updated: float = 0.0
     turn_started: float = 0.0
     hidden: bool = False
@@ -87,6 +90,9 @@ class Overlay:
 
     MAX_HIGHLIGHTS = 5
     MAX_TASKS = 6
+    MAX_POINTERS = 3
+    MAX_ROUTE = 6
+    DIRECTIONS = ("here", "left", "right", "up", "down", "behind")
 
     def touch(self) -> None:
         self.updated = time.time()
@@ -101,6 +107,30 @@ class Overlay:
         self.touch()
         return hl
 
+    def add_pointer(self, x: float, y: float, label: str, direction: str, seconds: float) -> dict:
+        if direction not in self.DIRECTIONS:
+            raise ValueError(f"direction must be one of {', '.join(self.DIRECTIONS)}")
+        now = time.time()
+        self.pointers = [p for p in self.pointers if p["until"] > now]
+        p = {"x": round(x, 4), "y": round(y, 4), "label": label, "direction": direction,
+             "seconds": seconds, "created": now, "until": now + seconds}
+        self.pointers.append(p)
+        self.pointers = self.pointers[-self.MAX_POINTERS:]
+        self.touch()
+        return p
+
+    def set_route(self, steps: list[dict], seconds: float) -> list[dict]:
+        now = time.time()
+        self.route = [{"n": i + 1, "x": round(float(st["x"]), 4), "y": round(float(st["y"]), 4),
+                       "label": st.get("label", ""), "until": now + seconds, "created": now, "seconds": seconds}
+                      for i, st in enumerate(steps[: self.MAX_ROUTE])]
+        self.touch()
+        return self.route
+
+    def clear_guidance(self) -> None:
+        self.pointers, self.route = [], []
+        self.touch()
+
     def start_turn(self) -> None:
         self.turn_started = time.time()
 
@@ -109,7 +139,7 @@ class Overlay:
         can actually see them, not when Coach drew them mid-turn (the rest of the turn, more
         tool calls and the reply, took longer than the box lived)."""
         now = time.time()
-        for hl in self.highlights:
+        for hl in self.highlights + self.pointers + self.route:
             if hl.get("created", 0) >= self.turn_started > 0:
                 hl["until"] = now + hl.get("seconds", 8)
         self.turn_started = 0.0
@@ -139,6 +169,9 @@ class Overlay:
         return {"highlights": [hl for hl in self.highlights if hl["until"] > now],
                 "tasks": list(self.tasks), "callout": self.callout, "callout_at": self.callout_at,
                 "hidden": self.hidden, "layout": dict(self.layout), "reaction": self.reaction,
+                "guide": self.guide,
+                "pointers": [p for p in self.pointers if p["until"] > now] if self.guide else [],
+                "route": [w for w in self.route if w["until"] > now] if self.guide else [],
                 "updated": self.updated, "now": now}
 
 
@@ -369,6 +402,42 @@ def t_highlight(s: Session, args: dict) -> str:
     return f"highlighted {label or 'spot'} at {where} for {seconds:g}s"
 
 
+GUIDE_OFF = "guide mode is off: the player has not turned on Guide me, so do not point; use callout instead"
+
+
+def t_point(s: Session, args: dict) -> str:
+    """Draw an arrow at a screen spot (or at the screen edge toward something off screen)."""
+    if not s.overlay.guide:
+        return GUIDE_OFF
+    x = _num(args, "x", lo=0, hi=1); y = _num(args, "y", lo=0, hi=1)
+    label = " ".join(str(args.get("label", "")).split())[:40]
+    direction = str(args.get("direction", "here")).strip().lower() or "here"
+    seconds = max(8.0, _num(args, "seconds", 12, 1, 60))
+    p = s.overlay.add_pointer(x, y, label, direction, seconds)
+    where = "here" if direction == "here" else f"off screen, {direction}"
+    s.record("callout", f"[point] {label or 'go'} {where}")
+    return f"pointed {label or 'there'} ({where}) at ({p['x']:.2f}, {p['y']:.2f}) for {seconds:g}s"
+
+
+def t_route(s: Session, args: dict) -> str:
+    """Draw numbered waypoints the player should follow, in order."""
+    if not s.overlay.guide:
+        return GUIDE_OFF
+    raw = args.get("steps")
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("steps must be a list of {x, y, label}")
+    steps = []
+    for st in raw[: Overlay.MAX_ROUTE]:
+        if not isinstance(st, dict):
+            raise ValueError("each step must be an object with x, y, label")
+        steps.append({"x": _num(st, "x", lo=0, hi=1), "y": _num(st, "y", lo=0, hi=1),
+                      "label": " ".join(str(st.get("label", "")).split())[:30]})
+    seconds = max(10.0, _num(args, "seconds", 20, 1, 90))
+    route = s.overlay.set_route(steps, seconds)
+    s.record("callout", "[route] " + " > ".join(w["label"] or f"step {w['n']}" for w in route))
+    return f"route with {len(route)} steps for {seconds:g}s: " + " > ".join(w["label"] or str(w["n"]) for w in route)
+
+
 def t_set_tasks(s: Session, args: dict) -> str:
     raw = args.get("tasks")
     if not isinstance(raw, list):
@@ -431,6 +500,21 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
           "required": ["x", "y"], "additionalProperties": False}, t_highlight),
     Tool("react", ReactionEngine(validate_assets=False).tool_schema()["function"]["description"],
          ReactionEngine(validate_assets=False).tool_schema()["function"]["parameters"], t_react),
+    Tool("point", "Guide me only. Draw an arrow on the player's screen at where to go or what to look at. x, y are fractions of "
+         "the screen from the top-left (0 to 1). If the target is off screen, give the direction and an x, y near that edge.",
+         {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"},
+                                           "label": {"type": "string", "description": "two or three words, e.g. 'Exit' or 'Health'"},
+                                           "direction": {"type": "string", "enum": list(Overlay.DIRECTIONS),
+                                                         "description": "here if the spot is on screen, else which way to turn"},
+                                           "seconds": {"type": "number", "description": "how long to show, 8 to 60 (default 12)"}},
+          "required": ["x", "y"], "additionalProperties": False}, t_point),
+    Tool("route", "Guide me only. Draw numbered waypoints the player should follow in order (2 to 6), each with x, y "
+         "fractions of the screen and a short label. Use for 'how do I get to X' with several steps.",
+         {"type": "object", "properties": {"steps": {"type": "array", "minItems": 1, "maxItems": 6, "items": {
+             "type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "label": {"type": "string"}},
+             "required": ["x", "y"], "additionalProperties": False}},
+                                           "seconds": {"type": "number", "description": "10 to 90 (default 20)"}},
+          "required": ["steps"], "additionalProperties": False}, t_route),
     Tool("set_tasks", "Replace the player's on-screen task list with the next things to do, in order (1 to 6 short lines).",
          {"type": "object", "properties": {"tasks": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 6}},
           "required": ["tasks"], "additionalProperties": False}, t_set_tasks),
