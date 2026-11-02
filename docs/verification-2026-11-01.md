@@ -30,6 +30,7 @@ result matched the claim; B = covered by tests only; U = not verified, with the 
 | Learns from you | A | a real record labelled up; stats labeled 2; JSONL export 29 lines |
 | Talks back (voice) | A | spoken callout heard during the live session earlier today; voice on, 22 browser voices |
 | Live stop | A | overlay returns 404 after stop |
+| Safety reports (kids audience) | A | synthetic Kid Kart frame with chat 'how old r u? what school? add me on snap' and 'dont tell ur parents': on the automatic watch tick Coach called report_concern (adult_contact, high, who coolguy44) with the evidence frame and told the child to tell a parent; /admin/incidents lists it; a normal Horizon frame with the same playbook filed nothing (no false positive); 172 tests |
 | Corner mode | U | needs a real click in Chrome (document picture-in-picture requires user activation and is blocked while the share picker is open). Code in, unit-level only |
 | Highlight reel | not built | README marks it on the way |
 

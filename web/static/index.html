@@ -316,6 +316,7 @@
         <textarea id="pb_rules" rows="3" placeholder="Rules. What is allowed, what ends a round."></textarea>
         <textarea id="pb_tips" rows="3" placeholder="Tips. What good players do early."></textarea>
         <textarea id="pb_mistakes" rows="3" placeholder="Common mistakes new players make."></textarea>
+        <label class="toggle" title="Who plays this game. Kids turns on the stricter safety watch: Coach files a report when an adult in chat asks a child for personal details, and tells the child to get a parent.">Audience <select id="pb_audience"><option value="">not set</option><option value="kids">kids</option><option value="teens">teens</option><option value="adults">adults</option></select></label>
       </div>
       <div class="row" style="margin-top:12px;justify-content:space-between">
         <label class="toggle" title="Coach assumes the player is new and teaches from the playbook"><input id="teach" type="checkbox"> New player mode</label>
@@ -667,7 +668,7 @@
   $('theme').onclick=()=>applyTheme(root.getAttribute('data-theme')==='light'?'dark':'light');
 
   // ---------- studio playbook ----------
-  const PB=['game','goal','controls','rules','tips','mistakes'];
+  const PB=['game','goal','controls','rules','tips','mistakes','audience'];
   function pbStatus(pb){ const c=$('pbStatus'); c.className='chip '+(pb?'ok':''); c.innerHTML=`<span class="dot"></span>${pb?esc(pb.game)+' loaded':'No playbook'}`; $('teach').disabled=!pb; if(!pb) $('teach').checked=false; }
   async function loadPlaybook(){ try{ const d=await (await fetch('/api/playbook')).json(); const pb=d.playbook; PB.forEach(k=>{ $('pb_'+k).value=pb?(pb[k]||''):''; }); pbStatus(pb); }catch(e){} }
   $('pbSave').onclick=async()=>{ const body={}; PB.forEach(k=>body[k]=$('pb_'+k).value);

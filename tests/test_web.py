@@ -364,3 +364,32 @@ def test_overlay_settings_layout_and_hidden(client):
     assert c.post("/api/overlay/nope/settings", json={"hidden": False}).status_code == 404
     c.post(f"/api/overlay/{lid}/settings", json={"hidden": False})
     assert c.get(f"/api/overlay/{lid}").json()["hidden"] is False
+
+
+def test_incident_routes_and_admin_token(client, monkeypatch):
+    c, webapp = client
+    assert c.get("/admin/incidents").status_code == 200 and "safety reports" in c.get("/admin/incidents").text
+    inc = webapp.app.state.incidents.add("bullying", "medium", "chat: 'uninstall, trash'", who="p2", game="G", frame_jpeg=JPEG)
+    j = c.get("/api/incidents?status=open").json()
+    assert j["stats"]["open"] == 1 and j["incidents"][0]["id"] == inc.id and j["incidents"][0]["frame"] == inc.frame
+    assert c.get(f"/api/incidents/frame/{inc.frame}").status_code == 200
+    assert c.get("/api/incidents/frame/..%2Fsecret.jpg").status_code in (400, 404)
+    r = c.post(f"/api/incidents/{inc.id}/status", json={"status": "confirmed", "note": "told the studio"})
+    assert r.status_code == 200 and r.json()["status"] == "confirmed"
+    assert c.post("/api/incidents/nope/status", json={"status": "open"}).status_code == 404
+    assert c.post(f"/api/incidents/{inc.id}/status", json={"status": "banned"}).status_code == 422
+    # with a token set, every incident route needs it
+    monkeypatch.setenv("COACH_ADMIN_TOKEN", "s3cret")
+    assert c.get("/api/incidents").status_code == 401
+    assert c.get("/api/incidents", headers={"X-Coach-Admin": "wrong"}).status_code == 401
+    assert c.get("/api/incidents", headers={"X-Coach-Admin": "s3cret"}).status_code == 200
+
+
+def test_playbook_audience_round_trip_and_prompt(client):
+    c, webapp = client
+    assert c.put("/api/playbook", json={"game": "Kid Kart", "goal": "race", "audience": "grownups"}).status_code == 400
+    r = c.put("/api/playbook", json={"game": "Kid Kart", "goal": "race", "audience": "kids"})
+    assert r.status_code == 200
+    pb = webapp.app.state.playbooks.load()
+    assert pb.audience == "kids" and "AUDIENCE: children" in pb.as_prompt() and "report_concern" in pb.as_prompt()
+    assert c.get("/api/playbook").json()["playbook"]["audience"] == "kids"

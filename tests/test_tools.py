@@ -200,3 +200,25 @@ def test_highlight_clock_restarts_when_turn_ends(session, monkeypatch):
     session.overlay.finish_turn()
     assert session.overlay.highlights[0]["until"] == t0 + 28  # ...so finish_turn restarts the clock
     assert len(session.overlay.snapshot()["highlights"]) == 1
+
+
+def test_report_concern_files_incident_with_frame(session, tmp_path, monkeypatch):
+    from coach.incidents import IncidentStore
+    from coach.tools import LiveFeed
+    from coach.playbook import make_playbook
+    assert run_tool(session, "report_concern", {"category": "bug", "what_you_saw": "x"}) == "error: reports are not enabled on this server"
+    session.incidents = IncidentStore(tmp_path / "inc.jsonl")
+    session.live = LiveFeed(); session.live.push(JPEG); session.live_id = "live1"
+    session.playbook = make_playbook({"game": "Kid Kart", "goal": "race", "audience": "kids"})
+    sent = []
+    monkeypatch.setattr("coach.tools.send_alert", lambda inc: sent.append(inc.id) or True)
+    out = run_tool(session, "report_concern", {"category": "adult_contact", "severity": "high",
+                                               "what_you_saw": "Chat from 'coolguy44': what school do you go to? add me on snap",
+                                               "who": "coolguy44"})
+    assert out.startswith("reported adult_contact (high) as ") and "Do not confront" in out
+    inc = session.incidents.recent()[0]
+    assert inc.who == "coolguy44" and inc.game == "Kid Kart" and inc.audience == "kids" and inc.live_id == "live1"
+    assert inc.frame and (tmp_path / "frames" / inc.frame).read_bytes() == JPEG and inc.alerted is True and sent == [inc.id]
+    assert run_tool(session, "report_concern", {"category": "gossip", "what_you_saw": "x"}).startswith("error: category must be")
+    assert run_tool(session, "report_concern", {"category": "bug", "what_you_saw": "  "}) == "error: say what you saw"
+    assert run_tool(session, "report_concern", {"category": "bug", "severity": "low", "what_you_saw": "fell through floor"}).startswith("reported bug (low)")

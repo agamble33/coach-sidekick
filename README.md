@@ -34,6 +34,8 @@ No other model, hosted or local, is called at runtime.
 | Live mode | Share your screen; a frame goes to Coach every 4 s and it calls out on its own when something matters | Live |
 | Playbook for studios | A studio saves the goal, controls, rules, tips and common mistakes; in New player mode Coach teaches one thing at a time as it comes up | Live |
 | Learns from you | Every callout and reply is a record with its frame; thumbs up/down and corrections feed back into Coach's instructions and export as chat-tuning JSONL for Muse open-weight training | Live |
+| Safety reports | Coach files a report, with the evidence frame, when it sees cheating or a hack, a game-breaking bug, bullying in chat, or an adult asking a child for personal details (kids audience in the playbook). A person reviews at /admin/incidents; optional webhook alert; Coach never acts on anyone itself | Live |
+| Overlay and PC app | Highlight boxes, task list and callouts over the game (/overlay, desktop/ Electron app, OBS source, VR pin); movable panels, H or Ctrl+Shift+O to hide | Live |
 | Highlight reel | Clips stitched into a reel with poster frames from Muse Image | On the way |
 
 ## What was built during the hackathon

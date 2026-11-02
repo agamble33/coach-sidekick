@@ -18,6 +18,7 @@ from typing import Any, Callable
 from .clips import cut_clip, detect_audio_events, detect_scene_events
 from .ingest import IngestError, VideoInfo, probe, sample_frames
 from .annotations import AnnotationStore
+from .incidents import CATEGORIES, SEVERITIES, IncidentStore, send_alert
 from .memory import MatchMemory
 from .playbook import Playbook
 from .meta_api import MetaAPIError, MetaClient
@@ -152,6 +153,8 @@ class Session:
     last_observation: str = ""
     last_record_id: str = ""
     overlay: Overlay = field(default_factory=Overlay)
+    incidents: IncidentStore | None = None
+    live_id: str = ""
     _info: VideoInfo | None = None
 
     @property
@@ -311,6 +314,27 @@ def t_callout(s: Session, args: dict) -> str:
     return f"said ({backend}): {text}"
 
 
+def t_report_concern(s: Session, args: dict) -> str:
+    """File a safety report for a human to review. Coach never acts on it itself."""
+    category = str(args.get("category", "")).strip().lower()
+    severity = str(args.get("severity", "medium")).strip().lower()
+    summary = str(args.get("what_you_saw", ""))
+    who = str(args.get("who", ""))
+    if s.incidents is None:
+        return "error: reports are not enabled on this server"
+    frame = None
+    if s.live is not None and s.live.latest() is not None:
+        frame = s.live.latest()[1]
+    mode = "teach" if s.teach else ("live" if s.live is not None else "match")
+    audience = s.playbook.audience if s.playbook else ""
+    inc = s.incidents.add(category, severity, summary, who=who, game=s.game, mode=mode, live_id=s.live_id,
+                          audience=audience, frame_jpeg=frame)
+    if send_alert(inc):
+        s.incidents.mark_alerted(inc.id)
+    s.record("observation", f"[safety report {inc.category}/{inc.severity}] {inc.summary}")
+    return f"reported {inc.category} ({inc.severity}) as {inc.id}; a person will review it. Do not confront anyone."
+
+
 def t_highlight(s: Session, args: dict) -> str:
     x = _num(args, "x", lo=0, hi=1); y = _num(args, "y", lo=0, hi=1)
     w = _num(args, "w", 0.12, 0.01, 1); h = _num(args, "h", 0.12, 0.01, 1)
@@ -369,6 +393,14 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool("callout", "Say something to the player out loud right now, like a teammate on voice chat.",
          {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"],
           "additionalProperties": False}, t_callout),
+    Tool("report_concern", "File a safety report for a human reviewer when you see cheating or a hack, a game-breaking "
+         "bug, bullying or harassment in chat, or an adult trying to get personal contact with a child. Say exactly what "
+         "you saw. Coach never acts on it; a person does.",
+         {"type": "object", "properties": {"category": {"type": "string", "enum": list(CATEGORIES)},
+                                           "severity": {"type": "string", "enum": list(SEVERITIES)},
+                                           "what_you_saw": {"type": "string", "description": "the exact words or behaviour on screen"},
+                                           "who": {"type": "string", "description": "on-screen name or description, if any"}},
+          "required": ["category", "what_you_saw"], "additionalProperties": False}, t_report_concern),
     Tool("highlight", "Draw a box on the player's screen overlay to point at something (an enemy, an exit, a pickup). "
          "x, y, w, h are fractions of the screen from the top-left (0 to 1). Pair it with a callout.",
          {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"},

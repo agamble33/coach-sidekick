@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coach safety reports</title>
+<style>
+  :root{--bg:#0b1020;--card:#121a30;--text:#e8ecf5;--muted:#9aa6c0;--line:#223052;--red:#ff6b6b;--amber:#ffd23f;--green:#4ade80}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,"Segoe UI",sans-serif}
+  main{max-width:1000px;margin:0 auto;padding:24px 16px 60px}
+  h1{font-size:24px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 18px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  select,input,button{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit}
+  button{cursor:pointer}button.primary{background:#0064e0;border-color:#0064e0}
+  .stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;color:var(--muted);font-size:13px}
+  .inc{display:grid;grid-template-columns:200px 1fr;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
+  .inc img{width:200px;border-radius:8px;background:#000}
+  .inc .noframe{width:200px;height:112px;border-radius:8px;background:#1b2440;display:grid;place-items:center;color:var(--muted);font-size:12px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:12px;font-weight:700;margin-right:6px;background:#1b2440}
+  .sev-high{background:var(--red);color:#1a0000}.sev-medium{background:var(--amber);color:#1a1400}.sev-low{background:#2a3a5c}
+  .st-open{border:1px solid var(--amber)}.st-confirmed{border:1px solid var(--red)}.st-dismissed{opacity:.6}.st-reviewing{border:1px solid #7fb3ff}
+  .meta{color:var(--muted);font-size:12.5px}.sum{margin:6px 0;font-size:15px}
+  .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .empty{color:var(--muted);padding:30px;text-align:center}
+  @media (max-width:640px){.inc{grid-template-columns:1fr}.inc img,.inc .noframe{width:100%}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Coach safety reports</h1>
+  <p class="sub">What Coach saw on a player's screen that a person should look at. Coach never acts on these itself. Review each one; mark it confirmed or dismissed.</p>
+  <div class="bar">
+    <label>Status <select id="f_status"><option value="">all</option><option value="open" selected>open</option><option value="reviewing">reviewing</option><option value="confirmed">confirmed</option><option value="dismissed">dismissed</option></select></label>
+    <label>Category <select id="f_cat"><option value="">all</option><option value="cheating">cheating</option><option value="hack">hack</option><option value="bug">bug</option><option value="bullying">bullying</option><option value="adult_contact">adult contacting a child</option><option value="other">other</option></select></label>
+    <label>Admin token <input id="token" type="password" placeholder="if COACH_ADMIN_TOKEN is set" size="22"></label>
+    <button id="refresh" class="primary">Refresh</button>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div id="list"></div>
+</main>
+<script>
+  const $=id=>document.getElementById(id);
+  try{ $('token').value=localStorage.getItem('coachAdminToken')||''; }catch(e){}
+  function hdr(){ const t=$('token').value.trim(); try{ localStorage.setItem('coachAdminToken',t); }catch(e){} return t?{'X-Coach-Admin':t}:{}; }
+  const LABEL={cheating:'cheating',hack:'hack',bug:'bug',bullying:'bullying',adult_contact:'adult contacting a child',other:'other'};
+  async function load(){
+    const qs=new URLSearchParams(); if($('f_status').value) qs.set('status',$('f_status').value); if($('f_cat').value) qs.set('category',$('f_cat').value);
+    const r=await fetch('/api/incidents?'+qs,{headers:hdr()});
+    if(r.status===401){ $('list').innerHTML='<div class="empty">Enter the admin token.</div>'; return; }
+    const j=await r.json(); const st=j.stats||{};
+    $('stats').innerHTML=`<span>${st.total||0} total</span><span>${st.open||0} open</span>`+Object.entries(st.by_category||{}).filter(([k,v])=>v).map(([k,v])=>`<span>${LABEL[k]||k}: ${v}</span>`).join('');
+    const list=$('list'); list.innerHTML='';
+    if(!j.incidents.length){ list.innerHTML='<div class="empty">Nothing here.</div>'; return; }
+    for(const i of j.incidents){
+      const d=document.createElement('div'); d.className='inc st-'+i.status;
+      const when=new Date(i.ts*1000).toLocaleString();
+      d.innerHTML=(i.frame?`<img src="/api/incidents/frame/${encodeURIComponent(i.frame)}" alt="evidence frame">`:`<div class="noframe">no frame</div>`)+
+        `<div><span class="tag sev-${i.severity}">${i.severity}</span><span class="tag">${LABEL[i.category]||i.category}</span><span class="tag">${i.status}</span>${i.audience?`<span class="tag">audience: ${i.audience}</span>`:''}
+         <div class="sum"></div><div class="meta">${when} in <b></b>${i.who?` &middot; who: <span></span>`:''} &middot; ${i.mode}${i.alerted?' &middot; alert sent':''}${i.note?` &middot; note: <em></em>`:''}</div>
+         <div class="acts"><input placeholder="note" size="30" maxlength="300"><button data-s="reviewing">Reviewing</button><button data-s="confirmed">Confirm</button><button data-s="dismissed">Dismiss</button><button data-s="open">Reopen</button></div></div>`;
+      d.querySelector('.sum').textContent=i.summary; d.querySelector('.meta b').textContent=i.game;
+      if(i.who) d.querySelector('.meta span').textContent=i.who; if(i.note) d.querySelector('.meta em').textContent=i.note;
+      d.querySelectorAll('button[data-s]').forEach(b=>b.onclick=async()=>{ const note=d.querySelector('.acts input').value; await fetch(`/api/incidents/${i.id}/status`,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},hdr()),body:JSON.stringify({status:b.dataset.s,note})}); load(); });
+      list.appendChild(d);
+    }
+  }
+  $('refresh').onclick=load; $('f_status').onchange=load; $('f_cat').onchange=load; load();
+</script>
+</body>
+</html>

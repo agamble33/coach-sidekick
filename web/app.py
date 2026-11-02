@@ -20,6 +20,7 @@ Routes
 from __future__ import annotations
 
 import json
+import re
 import os
 import queue
 import secrets
@@ -42,6 +43,7 @@ from coach.annotations import AnnotationStore
 from coach.clips import detect_audio_events, detect_scene_events
 from coach.config import load_settings
 from coach.health import health_report
+from coach.incidents import STATUSES, IncidentStore
 from coach.ingest import VIDEO_SUFFIXES, IngestError, probe
 from coach.memory import MatchMemory
 from coach.meta_api import MetaAPIError, MetaClient
@@ -143,6 +145,7 @@ app.state.transcribe = transcribe_file
 app.state.memory = MatchMemory(DATA / "memory.json")
 app.state.playbooks = PlaybookStore(DATA / "playbook.json")
 app.state.annotations = AnnotationStore(DATA / "annotations" / "records.jsonl")
+app.state.incidents = IncidentStore(DATA / "incidents" / "incidents.jsonl")
 
 
 def _match_dir(mid: str) -> Path:
@@ -276,7 +279,8 @@ def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
                               memory=app.state.memory,
                               match=meta["name"] if meta else ("live session" if live_id else "no match"),
                               video=meta["video"] if meta else None, client=client, live=feed,
-                              annotations=app.state.annotations)
+                              annotations=app.state.annotations, incidents=app.state.incidents,
+                              live_id=live_id or "")
             _agents[key] = CoachAgent(client, session)
         agent = _agents[key]
         agent.session.playbook = app.state.playbooks.load()      # always current
@@ -444,6 +448,7 @@ async def transcribe(file: UploadFile = File(...), consent: str = Depends(requir
 
 class PlaybookIn(BaseModel):
     game: str = Field(min_length=1, max_length=80)
+    audience: str = ""
     goal: str = ""
     controls: str = ""
     rules: str = ""
@@ -519,6 +524,52 @@ def annotation_export_download():
     if not out.is_file():
         raise HTTPException(404, "export first with POST /api/annotations/export")
     return FileResponse(out, media_type="application/jsonl", filename="coach-training.jsonl")
+
+
+# ---- safety reports (studio or admin) ------------------------------------------------------
+# Protected by COACH_ADMIN_TOKEN when it is set (header X-Coach-Admin); open on a pilot box with
+# no token, since the page is only reachable on the local network.
+def require_admin(x_coach_admin: str | None = Header(default=None)) -> None:
+    token = os.environ.get("COACH_ADMIN_TOKEN", "")
+    if token and not (x_coach_admin and secrets.compare_digest(x_coach_admin, token)):
+        raise HTTPException(401, "admin token required")
+
+
+@app.get("/admin/incidents")
+def incidents_page():
+    return FileResponse(STATIC / "incidents.html")
+
+
+@app.get("/api/incidents")
+def incidents_list(limit: int = 50, status: str | None = None, category: str | None = None,
+                   _: None = Depends(require_admin)):
+    store = app.state.incidents
+    return {"incidents": [asdict(i) for i in store.recent(limit=max(1, min(limit, 200)), status=status, category=category)],
+            "stats": store.stats()}
+
+
+class IncidentStatusIn(BaseModel):
+    status: str = Field(pattern="^(" + "|".join(STATUSES) + ")$")
+    note: str = Field(default="", max_length=300)
+
+
+@app.post("/api/incidents/{iid}/status")
+def incidents_status(iid: str, body: IncidentStatusIn, _: None = Depends(require_admin)):
+    try:
+        inc = app.state.incidents.set_status(iid, body.status, body.note)
+    except KeyError:
+        raise HTTPException(404, "no such report")
+    return asdict(inc)
+
+
+@app.get("/api/incidents/frame/{name}")
+def incidents_frame(name: str, _: None = Depends(require_admin)):
+    if not re.fullmatch(r"[0-9a-f]{12}\.jpg", name):
+        raise HTTPException(400, "bad frame name")
+    f = app.state.incidents.frames_dir / name
+    if not f.is_file():
+        raise HTTPException(404, "no frame")
+    return FileResponse(f, media_type="image/jpeg")
 
 
 @app.get("/api/memory")

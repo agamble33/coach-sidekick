@@ -18,6 +18,9 @@ class PlaybookError(ValueError):
     pass
 
 
+AUDIENCES = ("", "kids", "teens", "adults")
+
+
 @dataclass(frozen=True)
 class Playbook:
     game: str
@@ -26,6 +29,7 @@ class Playbook:
     rules: str = ""
     tips: str = ""
     mistakes: str = ""
+    audience: str = ""      # kids, teens, adults or unknown; kids makes the safety watch stricter
 
     def as_prompt(self) -> str:
         parts = [f"PLAYBOOK for {self.game}. Use it to teach a new player while they play. "
@@ -34,6 +38,13 @@ class Playbook:
             text = getattr(self, name).strip()
             if text:
                 parts.append(f"{name.upper()}: {text}")
+        if self.audience == "kids":
+            parts.append("AUDIENCE: children. Safety first: if an adult or stranger in chat asks the player "
+                         "for their age, school, address, photos, a phone number, to move to another app, or "
+                         "to keep a secret, use report_concern with category adult_contact and tell the "
+                         "player, kindly, to tell a parent and not answer. Report bullying in chat too.")
+        elif self.audience:
+            parts.append(f"AUDIENCE: {self.audience}.")
         return "\n".join(parts)
 
     def total_chars(self) -> int:
@@ -51,7 +62,10 @@ def make_playbook(data: dict) -> Playbook:
     game = _clean(data.get("game"), 80)
     if not game:
         raise PlaybookError("game name is required")
-    pb = Playbook(game=game, **{n: _clean(data.get(n), MAX_CHARS) for n in SECTIONS})
+    audience = _clean(data.get("audience"), 20).lower()
+    if audience not in AUDIENCES:
+        raise PlaybookError("audience must be kids, teens or adults")
+    pb = Playbook(game=game, audience=audience, **{n: _clean(data.get(n), MAX_CHARS) for n in SECTIONS})
     if pb.total_chars() > MAX_CHARS:
         raise PlaybookError(f"playbook is longer than {MAX_CHARS} characters")
     if not any(getattr(pb, n) for n in SECTIONS):
