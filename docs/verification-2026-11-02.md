@@ -56,3 +56,22 @@ pass their tests; nothing in Gates 10 to 12 changed their code paths except what
 
 Gates 10 and 11 are ready to merge. Gate 12 is ready on the Coach side; keep the Unity part out of
 the demo unless it compiles and runs on Nov 3.
+
+## Live reactions check, 2026-11-03
+
+`scripts/live_reactions_check.py`: real Coach server (gate13-guardrails), real overlay page in
+Chromium, reactions fired through the API and from a game event. **45/45 checks passed**:
+
+- All 9 triggers: correct card (512 px), a line from the trigger's set, the right sting started
+  playing (duration and playback position read from the audio element), card tagged with the avatar.
+- Cooldown: a repeat inside 8 s is refused with `trigger cooldown`.
+- Face changes live: avatar switched Muse Bot -> Coach -> Dog -> Muse Bot; badge image and name
+  update within a poll, and the next reaction card carries the new avatar.
+- Classic pack shows the polished original horse; rizz falls back to the 3D card.
+- Game event `fell` fires `missed_jump` with card and sting, no model call.
+- Spice off: nothing fires. No page errors.
+- Browser that blocks autoplay: the "Click once for meme sounds" chip appears, and one click plays
+  the sting that was blocked.
+
+Not covered: the model choosing to call `react` on its own (needs the Meta API; run
+`scripts/regrade_live.py` on the PC).
