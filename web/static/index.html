@@ -650,7 +650,7 @@
   }
 
   // ---------- live mode (screen share) ----------
-  const FRAME_EVERY_MS=4000, WATCH_EVERY_MS=20000, FRAME_W=960;
+  const FRAME_EVERY_MS=4000, WATCH_EVERY_MS=30000, FRAME_W=960, SCENE_CHANGE=0.06; // auto callouts only when the screen changed (saves tokens)
   async function goLive(){
     if(state.live) return;
     if(!await ensureConsent()) return;
@@ -667,13 +667,17 @@
       setStatus('Watching your game', true);
       state.frameTimer=setInterval(pushFrame, FRAME_EVERY_MS); pushFrame();
       overlayHidden=false; $('overlayhide').textContent='Hide overlay (H)'; pushOverlaySettings(); sdkSync();
-      state.watchTimer=setInterval(()=>{ if($('autowatch').checked && !state.busy) send('',{watch:true}); }, WATCH_EVERY_MS);
+      state.watchTimer=setInterval(()=>{ if(!$('autowatch').checked || state.busy) return; if(!state.sceneChanged){ setStatus('Screen unchanged, Coach is holding', false); return; } state.sceneChanged=false; send('',{watch:true}); }, WATCH_EVERY_MS);
     }catch(e){ add('msg err','Could not start live mode: '+e.message); }
   }
+  // tiny 16x9 grey thumbnail of the frame; mean pixel difference from the last one (0..1)
+  const _s=document.createElement('canvas'); _s.width=16; _s.height=9; let _last=null;
+  function sceneDiff(c){ const x=_s.getContext('2d',{willReadFrequently:true}); x.drawImage(c,0,0,16,9); const d=x.getImageData(0,0,16,9).data; const g=new Float32Array(144); for(let i=0;i<144;i++) g[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/765; let diff=1; if(_last){ diff=0; for(let i=0;i<144;i++) diff+=Math.abs(g[i]-_last[i]); diff/=144; } _last=g; return diff; }
   async function pushFrame(){
     if(!state.live) return; const v=$('liveVideo'); if(!v.videoWidth) return;
     const c=$('grab'); const scale=Math.min(1, FRAME_W/v.videoWidth); c.width=Math.round(v.videoWidth*scale); c.height=Math.round(v.videoHeight*scale);
     c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+    if(sceneDiff(c)>SCENE_CHANGE) state.sceneChanged=true;
     const blob=await new Promise(res=>c.toBlob(res,'image/jpeg',0.7)); if(!blob) return;
     const fd=new FormData(); fd.append('file',blob,'frame.jpg');
     try{ const r=await fetch(`/api/live/${state.live}/frame`,{method:'POST',body:fd}); $('liveBadge').className='livebadge'+(r.ok?'':' idle'); $('liveInfo').textContent=`Sharing ${c.width}×${c.height}. A frame goes to Coach every ${FRAME_EVERY_MS/1000}s; auto callouts every ${WATCH_EVERY_MS/1000}s.`; }

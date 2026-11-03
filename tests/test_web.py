@@ -586,3 +586,9 @@ def test_go_live_reachable_after_a_match_loads(client):
     html = c.get("/").text
     i = html.index('id="matchCard"'); j = html.index("</div>", html.index('id="sample2"'))
     assert 'id="golive2"' in html[i:j + 200] and "$('golive2').onclick=goLive" in html
+
+
+def test_auto_callouts_wait_for_a_scene_change(client):
+    """The watch tick is the expensive call; the page must skip it when the shared screen has not changed."""
+    html = client[0].get("/").text
+    assert "sceneDiff(" in html and "state.sceneChanged" in html and "WATCH_EVERY_MS=30000" in html

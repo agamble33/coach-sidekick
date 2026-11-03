@@ -62,4 +62,4 @@ def test_kill_switch(tmp_path):
 
 def test_limits_from_env():
     lim = Limits.from_env({"COACH_TURNS_PER_MIN": "5", "COACH_DAILY_TOKENS": "oops"})
-    assert lim.turns_per_min == 5 and lim.daily_tokens == 1_000_000
+    assert lim.turns_per_min == 5 and lim.daily_tokens == 5_000_000 and lim.daily_tokens_per_subject == 1_500_000

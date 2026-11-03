@@ -7,9 +7,13 @@ Three small things, no accounts, no moderation model, nothing to over-engineer.
 - Per subject (the consent id, else the client address): 20 turns, 60 live frames and 20
   transcriptions per minute. Over the cap the API answers **429** with one plain sentence
   ("Coach needs a breather ...") and no model call is made.
-- Daily token budget counted from the `usage` the Model API returns: 1,000,000 tokens for everyone
-  together, 300,000 per subject, reset at midnight UTC, persisted in `COACH_DATA/budget.json` so a
-  restart does not reset it.
+- Daily token budget counted from the `usage` the Model API returns: 5,000,000 tokens for everyone
+  together, 1,500,000 per subject, reset at midnight UTC, persisted in `COACH_DATA/budget.json` so a
+  restart does not reset it. Sizing: a live session with auto callouts costs about 10k tokens a
+  minute while the screen is changing (the first 300k cap ran out in nine minutes of a real demo).
+  The dashboard only sends an auto callout when the shared screen actually changed, which is what
+  keeps a quiet game from spending anything. Set `COACH_DAILY_TOKENS` and
+  `COACH_DAILY_TOKENS_PER_SUBJECT` to tune; delete `budget.json` to reset a day by hand.
 - Kill switch: `COACH_DISABLED=1` makes every model-backed endpoint answer **503**.
 - Env knobs: `COACH_TURNS_PER_MIN`, `COACH_FRAMES_PER_MIN`, `COACH_TRANSCRIBES_PER_MIN`,
   `COACH_DAILY_TOKENS`, `COACH_DAILY_TOKENS_PER_SUBJECT`.

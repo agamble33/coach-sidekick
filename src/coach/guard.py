@@ -29,8 +29,8 @@ class Limits:
     turns_per_min: int = 20
     frames_per_min: int = 60
     transcribes_per_min: int = 20
-    daily_tokens: int = 1_000_000          # everyone together
-    daily_tokens_per_subject: int = 300_000
+    daily_tokens: int = 5_000_000          # everyone together
+    daily_tokens_per_subject: int = 1_500_000   # a live session with auto callouts runs about 10k tokens a minute while the screen is changing
 
     @classmethod
     def from_env(cls, env=None) -> "Limits":
@@ -41,8 +41,8 @@ class Limits:
             except (TypeError, ValueError):
                 return d
         return cls(turns_per_min=n("COACH_TURNS_PER_MIN", 20), frames_per_min=n("COACH_FRAMES_PER_MIN", 60),
-                   transcribes_per_min=n("COACH_TRANSCRIBES_PER_MIN", 20), daily_tokens=n("COACH_DAILY_TOKENS", 1_000_000),
-                   daily_tokens_per_subject=n("COACH_DAILY_TOKENS_PER_SUBJECT", 300_000))
+                   transcribes_per_min=n("COACH_TRANSCRIBES_PER_MIN", 20), daily_tokens=n("COACH_DAILY_TOKENS", 5_000_000),
+                   daily_tokens_per_subject=n("COACH_DAILY_TOKENS_PER_SUBJECT", 1_500_000))
 
 
 @dataclass
