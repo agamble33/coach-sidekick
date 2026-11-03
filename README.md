@@ -1,3 +1,5 @@
+<p align="center"><img src="media/coach-logo.png" alt="Coach" width="260"></p>
+
 # Coach
 
 **An in-game AI sidekick.** Coach plays with you, not for you: live strategy while you play, a guide that teaches new players by playing alongside them, and a teammate that remembers what happened last match. It sees the game, hears you, talks back, and acts through tool calls.
