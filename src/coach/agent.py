@@ -26,7 +26,7 @@ from .tools import Session, run_tool, tool_specs
 MAX_ROUNDS = 8
 HISTORY_ITEMS = 12          # local threading: last 6 player/Coach exchanges carried into each turn
 # what a watch/teach tick can use: the overlay tools are in so Coach can point and set tasks on its own
-LIVE_TICK_TOOLS = ["look_now", "callout", "highlight", "react", "set_tasks", "task_done", "remember", "recall", "my_preferences", "report_concern"]
+LIVE_TICK_TOOLS = ["look_now", "callout", "highlight", "react", "set_tasks", "task_done", "remember", "recall", "my_preferences", "report_concern", "set_game"]
 GUIDE_TOOLS = ["point", "route"]   # offered only while the player has Guide me on
 AGENT_SYSTEM = COACH_SYSTEM + (
     " You have tools: look_now sees the player's live screen, look sees a loaded match video at a time, "
@@ -44,7 +44,8 @@ AGENT_SYSTEM = COACH_SYSTEM + (
     "Prefer acting over describing what you could do. After acting, reply in one or two short sentences."
 )
 WATCH_PROMPT = (
-    "Watch tick. Use look_now once. If something matters right now (danger, an opening, a mistake to fix, "
+    "Watch tick. Use look_now once. If the GAME line below says unknown and you can tell the game from the screen, use set_game. "
+    "If something matters right now (danger, an opening, a mistake to fix, "
     "an objective), use callout with one short line a teammate would say, and if it is at a spot on screen "
     "also use highlight to point at it. If the player just whiffed, fell, ignored your last callout, pulled off a "
     "clutch, or is flirting instead of playing, use react once with the matching trigger. If the player's next "
@@ -71,6 +72,8 @@ GUIDE_PROMPT = (
 
 def instructions_for(session: Session) -> str:
     text = AGENT_SYSTEM
+    known = bool(session.playbook or session.game_state.game or session.game_name)
+    text += f"\n\nGAME: {session.game if known else 'unknown (use set_game once you can tell)'}"
     if session.overlay.guide:
         text += GUIDE_PROMPT
     game = session.game_state.as_prompt()

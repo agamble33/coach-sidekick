@@ -592,3 +592,43 @@ def test_auto_callouts_wait_for_a_scene_change(client):
     """The watch tick is the expensive call; the page must skip it when the shared screen has not changed."""
     html = client[0].get("/").text
     assert "sceneDiff(" in html and "state.sceneChanged" in html and "WATCH_EVERY_MS=30000" in html
+
+
+def test_one_coach_turn_at_a_time_per_session(client):
+    """Loop safety: a second turn (or a watch tick) on a session that is still answering is refused, never queued."""
+    import threading
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    gate = threading.Event()
+
+    class SlowMeta:
+        def post_json(self, path, payload):
+            gate.wait(5)
+            return {"id": "r1", "output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}]}
+    webapp.app.state.client_factory = lambda: SlowMeta()
+    webapp._agents.clear()
+    out = {}
+    def first():
+        with c.stream("POST", "/api/turn", json={"live_id": lid, "text": "hi"}) as r:
+            out["status"] = r.status_code; out["body"] = "".join(r.iter_text())
+    t = threading.Thread(target=first); t.start()
+    for _ in range(50):          # wait until the first turn is marked busy
+        if f"live:{lid}" in webapp._busy:
+            break
+        __import__("time").sleep(0.02)
+    assert f"live:{lid}" in webapp._busy
+    r2 = c.post("/api/turn", json={"live_id": lid, "text": "again"})
+    assert r2.status_code == 409 and "still answering" in r2.json()["detail"]
+    r3 = c.post("/api/turn", json={"live_id": lid, "watch": True})
+    assert r3.status_code == 409
+    gate.set(); t.join(10)
+    assert out["status"] == 200 and "event: done" in out["body"] and '"game": "live session"' in out["body"]
+    assert f"live:{lid}" not in webapp._busy
+    assert c.post("/api/turn", json={"live_id": lid, "text": "free again"}).status_code == 200
+
+
+def test_dashboard_hands_free_and_player_readable_steps(client):
+    html = client[0].get("/").text
+    assert 'id="listen"' in html and "Coach, stop talking" in html and "Coach, talk to me" in html
+    assert "function plainStep(" in html and 'id="details"' in html and 'id="gameTag"' in html
+    assert 'id="howto"' in html and "docs/vr.md" in html and "docs/pc-overlay.md" in html

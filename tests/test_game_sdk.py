@@ -107,3 +107,16 @@ def test_fake_game_projection():
     assert not vis and d == "behind"
     st = fake_game.state_at(7.2)
     assert st["events"] and st["events"][0]["type"] == "fell" and len(st["landmarks"]) == 3
+
+
+def test_set_game_tool_names_the_game_unless_the_sdk_already_did(tmp_path):
+    from coach.memory import MatchMemory
+    from coach.tools import Session, run_tool
+    s = Session(work_dir=tmp_path, memory=MatchMemory(tmp_path / "m.json"), match="live session")
+    assert "GAME: unknown" in instructions_for(s)
+    assert run_tool(s, "set_game", '{"name": "Beat Saber"}') == "game set to Beat Saber"
+    assert s.game == "Beat Saber" and "GAME: Beat Saber" in instructions_for(s)
+    s.game_state.update({"game": "Rocket Rally"})
+    assert "keeping that" in run_tool(s, "set_game", '{"name": "Something Else"}')
+    assert s.game == "Rocket Rally"
+    assert "error" in run_tool(s, "set_game", '{"name": ""}')

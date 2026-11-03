@@ -150,6 +150,11 @@
   .consent label.ck{display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14.5px;cursor:pointer}.consent label.ck input{margin-top:3px;flex:none}
   .consent .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}.consent .err{color:#ff9b9b;font-size:13px;margin-top:8px;min-height:1em}
   .step .t .ok{color:var(--green)}
+  .step.plain{background:transparent;border:0;padding:2px 4px;font-size:13px;color:var(--text-2)}
+  .step.plain .t{font-weight:500;color:var(--text-2)} .step.plain .a,.step.plain .o{display:none}
+  #gameTag{background:var(--blue-tint);color:var(--blue)}
+  #listen.on{background:var(--green);color:#06130D}
+  #listen.on .pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:#06130D;animation:pulse 1.2s infinite}
   .step .a,.step .o{margin-top:4px;color:var(--text-2);font-family:var(--mono);font-size:12px;white-space:pre-wrap;word-break:break-all}
   .step .o{color:var(--text);border-top:.8px solid var(--border);padding-top:4px}
   .composer{margin-top:10px;border:.8px solid var(--border);border-radius:9999px;padding:6px;display:flex;align-items:flex-end;gap:8px;background:var(--surface)}
@@ -161,7 +166,8 @@
   .tips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .tip{font-size:12.5px;padding:5px 10px;border-radius:9999px;background:var(--surface);color:var(--text-2);border:0;cursor:pointer}
   .tip:hover{background:var(--border);color:var(--text)}
-  .foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;color:var(--text-3)}
+  .foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;color:var(--text-3);flex-wrap:wrap;gap:4px 10px}
+  .wrap>*,.coach,.card{min-width:0}
   .toggle{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
   .toggle input{accent-color:var(--blue)}
 
@@ -306,6 +312,15 @@
         <button id="sdk_copy" class="btn secondary" title="Copy base URL, live id and consent id for CoachClient in Unity">Copy for Unity</button>
         <span class="sub" style="margin:0;font-size:12.5px">Paste into CoachClient. Arrows then draw inside your game at real positions.</span>
       </div>
+      <details id="howto" style="margin:-4px 0 12px;padding:8px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--border);font-size:13.5px;color:var(--text-2)">
+        <summary style="cursor:pointer;color:var(--text);font-weight:600">See and hear Coach while you play</summary>
+        <ol style="margin:8px 0 4px 18px;padding:0;line-height:1.6">
+          <li><b>PC game, one screen:</b> click <b>Overlay</b>, then run the Coach PC overlay app (<a href="https://github.com/agamble33/coach-sidekick/blob/main/docs/pc-overlay.md" target="_blank" rel="noopener">docs/pc-overlay.md</a>) so arrows, tasks and memes sit on top of the game. Streaming? Add the Overlay link as an OBS Browser Source instead.</li>
+          <li><b>PC VR (Quest Link, Air Link, Steam Link):</b> same Overlay link pinned in the headset with XSOverlay, OVR Toolkit or Desktop+ (<a href="https://github.com/agamble33/coach-sidekick/blob/main/docs/vr.md" target="_blank" rel="noopener">docs/vr.md</a>). PC audio goes into the headset, so Coach is in your ear.</li>
+          <li><b>Standalone Quest (casting):</b> you hear Coach from the PC speakers; the overlay stays on the PC screen. Meta does not allow third-party overlays inside Quest games.</li>
+          <li><b>Hands-free:</b> press the headset button next to the mic and say <b>"Coach, where do I go?"</b>. <b>"Coach, stop talking"</b> mutes, <b>"Coach, talk to me"</b> unmutes.</li>
+        </ol>
+      </details>
       <div class="player"><video id="liveVideo" autoplay muted playsinline></video><div class="livebadge" id="liveBadge">LIVE</div></div>
       <canvas id="grab" hidden></canvas>
     </div>
@@ -431,7 +446,7 @@
   <aside class="card coach">
     <div class="head">
       <div id="avatar" class="avatar">C</div>
-      <div><div style="font-weight:600">Coach</div><div id="cstatus" class="status">Ready when you are</div></div>
+      <div><div style="font-weight:600">Coach <span id="gameTag" class="chip" style="height:22px;font-size:12px;margin-left:6px" hidden></span></div><div id="cstatus" class="status">Ready when you are</div></div>
     </div>
     <div id="feed" class="feed">
       <div class="msg from-coach">Hey, I'm Coach. Load a match and tell me what you want: a read on a moment, the best clip, or what we learned last time.</div>
@@ -443,6 +458,7 @@
       <button class="tip" data-t="What did we learn last match?">What did we learn?</button>
     </div>
     <div class="composer">
+      <button id="listen" class="icon" title="Hands-free: Coach listens for the word Coach, e.g. 'Coach, where do I go?' Say 'Coach, stop talking' to mute and 'Coach, talk to me' to unmute."><span class="pulse" hidden></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></button>
       <button id="mic" class="icon" title="Hold to talk (or click to toggle)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
       </button>
@@ -453,6 +469,7 @@
     </div>
     <div class="foot">
       <label class="toggle"><input id="voice" type="checkbox" checked> Coach speaks replies</label>
+      <label class="toggle" title="Show the raw tool calls and results"><input id="details" type="checkbox"> Details</label>
       <span id="usage" style="margin-left:10px"></span>
       <span style="margin-left:auto;font-size:12px"><a href="/terms" target="_blank" rel="noopener">Pilot terms</a> &middot; <a href="#" id="resetConsent" title="Coach will ask you to agree again before it sees or hears anything">Reset consent</a></span>
     </div>
@@ -495,10 +512,36 @@
   function showStats(st){ if(!st) return; $('st_records').textContent=st.records; $('st_labeled').textContent=st.labeled; $('st_up').textContent=st.up; $('st_frames').textContent=st.frames; }
   async function loadStats(){ try{ showStats(await (await fetch('/api/annotations/stats')).json()); }catch(e){} }
   function setStatus(t, live){ $('cstatus').textContent=t; $('avatar').classList.toggle('live', !!live); }
+  // What a player sees for each tool call. Details (the raw call and result) stay one click away.
+  let SHOW_DETAILS=false; try{ SHOW_DETAILS=localStorage.getItem('coachDetails')==='1'; }catch(e){}
+  function plainStep(name, args){ let a={}; try{ a=JSON.parse(args||'{}'); }catch(e){}
+    const L=(a.label||a.name||'').trim();
+    switch(name){
+      case 'look_now': return 'Coach is looking at your screen';
+      case 'look': return 'Coach is checking the match video';
+      case 'highlight': return L?`Coach marked ${L} on your overlay`:'Coach marked a spot on your overlay';
+      case 'point': return L?`Coach pointed at ${L}`:'Coach drew an arrow';
+      case 'route': return 'Coach drew a route';
+      case 'set_tasks': return 'Coach updated your task list';
+      case 'task_done': return 'Coach checked off a task';
+      case 'callout': return 'Coach called it out';
+      case 'react': return 'Coach reacted';
+      case 'remember': return 'Coach made a note';
+      case 'recall': return 'Coach is checking its notes';
+      case 'remember_preference': return `Coach saved your setting${a.name?': '+a.name:''}`;
+      case 'my_preferences': return 'Coach is checking your settings';
+      case 'set_game': return L?`Coach sees you are playing ${L}`:'Coach is working out the game';
+      case 'find_moments': return 'Coach is finding the big moments';
+      case 'cut_clip': return 'Coach is cutting a clip';
+      case 'report_concern': return 'Coach flagged something for a human to check';
+      default: return 'Coach is working ('+name+')';
+    } }
+  function gameSync(){ const el=$('gameTag'); if(!el) return; el.hidden=!state.game; el.textContent=state.game?('Playing: '+state.game):''; }
   function speak(text){
-    if(!$('voice').checked || !('speechSynthesis' in window) || !text) return;
+    if(state.muted || !$('voice').checked || !('speechSynthesis' in window) || !text) return;
     speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(text.replace(/\s*[\u2014\u2013]\s*/g,', ')); u.rate=1.05;
+    u.onstart=()=>{ state.speaking=true; }; u.onend=u.onerror=()=>{ state.speaking=false; };
     const v=speechSynthesis.getVoices().find(v=>/en[-_]US/i.test(v.lang) && /Natural|Premium|Enhanced|Google/i.test(v.name)) || speechSynthesis.getVoices().find(v=>/en/i.test(v.lang));
     if(v) u.voice=v; speechSynthesis.speak(u);
   }
@@ -558,6 +601,9 @@
     let step=null;
     try{
       const r=await fetch('/api/turn',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({match_id:state.match?state.match.id:null,live_id:state.live,text:watch?null:text,watch,teach:$('teach').checked})});
+      if(r.status===409){ if(watch){ state.busy=false; $('send').disabled=false; return; }
+        if((opts.tries||0)<12){ setStatus('Coach is finishing a look, one sec', true); await new Promise(r=>setTimeout(r,1500)); state.busy=false; return send(text,{...opts,tries:(opts.tries||0)+1}); }
+        throw new Error('Coach is still busy with the last one; try again'); }
       if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.detail||('HTTP '+r.status)); }
       const reader=r.body.getReader(); const dec=new TextDecoder(); let buf='';
       while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
@@ -565,11 +611,12 @@
           const ev=/^event: (\w+)/m.exec(block)?.[1]; const data=JSON.parse(/^data: (.*)$/m.exec(block)?.[1]||'{}');
           if(ev==='tool_call'){ setStatus(`Using ${data.name}…`, true);
             if(watch && data.name==='look_now'){ step=null; continue; }
-            step=add('step',`<div class="t"><span class="spin"></span>Coach is using <span class="k">${esc(data.name)}</span></div><div class="a">${esc(data.arguments||'')}</div>`); }
+            step=add('step'+(SHOW_DETAILS?'':' plain'),`<div class="t"><span class="spin"></span><span class="say">${esc(plainStep(data.name,data.arguments))}</span></div><div class="a">${esc(data.arguments||'')}</div>`); }
           else if(ev==='tool_result' && step){ step.querySelector('.spin').outerHTML='<span class="ok">✓</span>'; const o=document.createElement('div'); o.className='o'; o.textContent=data.output; step.appendChild(o);
+            if(data.name==='set_game'){ const m=/game set to (.*)$/.exec(data.output); if(m){ state.game=m[1]; gameSync(); } }
             if(data.name==='cut_clip') refreshMatch(); if(data.name==='remember') loadMemory();
             if(data.name==='callout'){ const m=/\): (.*)$/s.exec(data.output); if(m){ speak(m[1]); const b=add('msg from-coach', esc(m[1])); const rt=rater(data.record_id); if(rt) b.appendChild(rt); loadStats(); } } }
-          else if(ev==='done'){ const quiet=watch && /^quiet\.?$/i.test((data.text||'').trim());
+          else if(ev==='done'){ const quiet=watch && /^quiet\.?$/i.test((data.text||'').trim()); if(data.game && !/^(live session|no match|current match)$/.test(data.game)){ state.game=data.game; gameSync(); }
             if(!quiet){ const b=add('msg from-coach', esc(data.text||'(no reply)')); const rt=rater(data.record_id); if(rt) b.appendChild(rt); speak(data.text); loadStats(); }
             $('usage').textContent=`${data.rounds} round${data.rounds===1?'':'s'} · ${data.input_tokens+data.output_tokens} tokens`; }
           else if(ev==='error'){ add('msg err', esc(data.message)); }
@@ -774,6 +821,38 @@
   mic.addEventListener('pointerleave',()=>{ if(held) stopRec(); });
   mic.addEventListener('click',()=>{ if(!held && state.rec && state.rec._tapped) stopRec(); else if(state.rec) state.rec._tapped=true; });
   if(!navigator.mediaDevices || !window.MediaRecorder){ mic.disabled=true; mic.title='Microphone needs a secure (https) page'; }
+
+  // ---------- hands-free: "Coach, ..." ----------
+  // The browser's own speech recognition listens for the wake word (free, no tokens). Only what follows
+  // "Coach" is sent. A few phrases are handled here without a model call: stop talking / talk to me.
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const WAKE=/^(?:hey |ok |okay |yo )?coach[,.!?]?\s*(.*)$/i;
+  const QUIET=/^(?:stop talking|be quiet|quiet|shut up|mute|hush|enough)\b/i, TALK=/^(?:talk to me|unmute|you can talk|start talking|wake up)\b/i;
+  state.muted=false; state.speaking=false; state.listening=false; let rec=null;
+  function voiceCommand(said){
+    if(QUIET.test(said)){ state.muted=true; $('autowatch').checked=false; speechSynthesis.cancel(); add('msg from-coach','Got it, going quiet. Say "Coach, talk to me" when you want me back.'); setStatus('Muted', false); return true; }
+    if(TALK.test(said)){ state.muted=false; $('autowatch').checked=true; add('msg from-coach','Back with you.'); speak('Back with you.'); setStatus('Listening for "Coach"', true); return true; }
+    return false;
+  }
+  function startListening(){
+    if(!SR){ add('msg err','Hands-free needs Chrome or Edge (speech recognition).'); return; }
+    rec=new SR(); rec.continuous=true; rec.interimResults=false; rec.lang='en-US';
+    rec.onresult=e=>{ for(let i=e.resultIndex;i<e.results.length;i++){ if(!e.results[i].isFinal) continue; const t=e.results[i][0].transcript.trim(); const m=WAKE.exec(t); if(!m) continue;
+        if(state.speaking) continue;                      // ignore Coach hearing itself
+        const said=(m[1]||'').trim(); if(!said){ speak('Yeah?'); setStatus('Yeah?', true); continue; }
+        if(voiceCommand(said)) continue; if(state.muted) state.muted=false;
+        send(said); } };
+    rec.onerror=e=>{ if(e.error==='not-allowed'){ add('msg err','Microphone blocked. Allow the mic for this page to use hands-free.'); stopListening(); } };
+    rec.onend=()=>{ if(state.listening){ try{ rec.start(); }catch(e){} } };     // Chrome stops after silence; keep going
+    try{ rec.start(); }catch(e){ return; }
+    state.listening=true; $('listen').classList.add('on'); $('listen').querySelector('.pulse').hidden=false; setStatus('Listening for "Coach"', true);
+    add('msg tip','Hands-free on. Say <b>"Coach, where do I go?"</b> or <b>"Coach, where is my team?"</b>. <b>"Coach, stop talking"</b> mutes, <b>"Coach, talk to me"</b> unmutes.');
+  }
+  function stopListening(){ state.listening=false; try{ rec && rec.stop(); }catch(e){} rec=null; $('listen').classList.remove('on'); $('listen').querySelector('.pulse').hidden=true; setStatus('Ready when you are', false); }
+  $('listen').onclick=()=>{ state.listening?stopListening():startListening(); };
+  if(!SR){ $('listen').title='Hands-free needs Chrome or Edge'; }
+  $('details').checked=SHOW_DETAILS;
+  $('details').onchange=e=>{ SHOW_DETAILS=e.target.checked; try{ localStorage.setItem('coachDetails', SHOW_DETAILS?'1':'0'); }catch(x){} document.querySelectorAll('.step').forEach(el=>el.classList.toggle('plain', !SHOW_DETAILS)); };
 
   // theme: dark by default, light on request, remembered per browser
   const root=document.documentElement;

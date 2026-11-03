@@ -40,7 +40,7 @@ def test_store_round_trip_and_corrupt(tmp_path):
 
 def test_instructions_include_playbook_and_teach(tmp_path):
     s = Session(work_dir=tmp_path, memory=MatchMemory(tmp_path / "m.json"))
-    assert instructions_for(s) == AGENT_SYSTEM
+    assert instructions_for(s).startswith(AGENT_SYSTEM) and "GAME: unknown" in instructions_for(s)
     s.playbook = make_playbook(GOOD)
     assert "PLAYBOOK for Rocket Rally" in instructions_for(s) and "NEW" not in instructions_for(s)
     s.teach = True

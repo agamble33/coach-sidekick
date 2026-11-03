@@ -63,6 +63,7 @@ MAX_AUDIO = 25 * 1024 * 1024
 app = FastAPI(title="Coach: Coach")
 _lock = threading.Lock()
 _agents: dict[str, CoachAgent] = {}
+_busy: set[str] = set()                 # sessions with a Coach turn in flight: one at a time, no pile-ups
 _matches: dict[str, dict] = {}
 _live: dict[str, LiveFeed] = {}
 MAX_LIVE = 20
@@ -571,6 +572,13 @@ def turn(body: TurnIn, request: Request):
     agent.session.teach = body.teach
     if body.teach and agent.session.playbook is None:
         raise HTTPException(400, "teach mode needs a playbook; save one first")
+    key = f"live:{body.live_id}" if body.live_id else (body.match_id or "none")
+    with _lock:
+        if key in _busy:
+            if body.watch:      # a tick that lands on a busy session is simply dropped
+                raise HTTPException(409, "Coach is still on the last one")
+            raise HTTPException(409, "Coach is still answering; wait for that reply")
+        _busy.add(key)
     q: queue.Queue = queue.Queue()
     agent.on_event = lambda kind, data: q.put((kind, data))
 
@@ -580,12 +588,14 @@ def turn(body: TurnIn, request: Request):
             app.state.guard.record_usage(subject, r.input_tokens + r.output_tokens)
             q.put(("done", {"text": r.text, "rounds": r.rounds, "input_tokens": r.input_tokens,
                             "output_tokens": r.output_tokens, "spoken": agent.session.spoken[-3:],
-                            "record_id": r.record_id, "offtopic": r.offtopic}))
+                            "record_id": r.record_id, "offtopic": r.offtopic, "game": agent.session.game}))
         except (MetaAPIError, ValueError) as exc:
             q.put(("error", {"message": str(exc)}))
         except Exception as exc:                       # never leave the stream empty
             q.put(("error", {"message": f"unexpected {type(exc).__name__}: {exc}"}))
         finally:
+            with _lock:
+                _busy.discard(key)
             q.put(None)
 
     threading.Thread(target=work, daemon=True).start()

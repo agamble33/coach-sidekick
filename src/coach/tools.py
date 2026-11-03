@@ -200,11 +200,16 @@ class Session:
     profile: "PlayerProfile | None" = None                       # Gate 13: the player's preferences per game
     incidents: IncidentStore | None = None
     live_id: str = ""
+    game_name: str = ""            # what Coach identified from the screen (set_game), used when there is no playbook or SDK name
     _info: VideoInfo | None = None
 
     @property
     def game(self) -> str:
-        return self.playbook.game if self.playbook else self.match
+        if self.playbook:
+            return self.playbook.game
+        if self.game_state.game:
+            return self.game_state.game
+        return self.game_name or self.match
 
     def record(self, kind: str, text: str, player_text: str = "") -> str:
         """Write an annotation record if a store is attached; returns its id or ''."""
@@ -346,6 +351,18 @@ def t_recall(s: Session, args: dict) -> str:
     if not notes:
         return "no notes yet"
     return "\n".join(f"[{n.match}] {n.text}" for n in notes)
+
+
+def t_set_game(s: Session, args: dict) -> str:
+    """Record which game the player is in, once Coach can tell from the screen or the player says."""
+    name = " ".join(str(args.get("name", "")).split())[:60]
+    if not name:
+        raise ValueError("name is required")
+    if s.game_state.game and s.game_state.game.lower() != name.lower():
+        return f"the game reports itself as {s.game_state.game}; keeping that"
+    s.game_name = name
+    s.record("callout", f"[game] {name}")
+    return f"game set to {name}"
 
 
 def t_callout(s: Session, args: dict) -> str:
@@ -535,6 +552,9 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
          {"type": "object", "properties": {"scope": {"type": "string", "enum": ["all", "this_match"]},
                                            "limit": {"type": "integer", "minimum": 1, "maximum": 50}},
           "additionalProperties": False}, t_recall),
+    Tool("set_game", "Record which game the player is playing, as soon as you can tell from the screen or they say it. "
+         "Use the common title (e.g. Fortnite, Beat Saber, Call of Duty Warzone). Call it once; call again only if the game changes.",
+         {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"], "additionalProperties": False}, t_set_game),
     Tool("callout", "Say something to the player out loud right now, like a teammate on voice chat.",
          {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"],
           "additionalProperties": False}, t_callout),

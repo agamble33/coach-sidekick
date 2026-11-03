@@ -46,7 +46,7 @@ def test_plain_text_turn(tmp_path):
     r = make_agent(tmp_path, t).turn("we won that round")
     assert r.text == "Nice, keep it up." and r.rounds == 1 and r.tool_calls == []
     p = t.payloads[0]
-    assert p["instructions"] == AGENT_SYSTEM and p["tool_choice"] == "auto"
+    assert p["instructions"].startswith(AGENT_SYSTEM) and "GAME: unknown" in p["instructions"] and p["tool_choice"] == "auto"
     assert {x["name"] for x in p["tools"]} >= {"look", "cut_clip", "remember", "recall", "callout"}
     assert "previous_response_id" not in p
 
