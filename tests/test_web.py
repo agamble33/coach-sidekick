@@ -639,3 +639,13 @@ def test_coach_windows_open_on_go_live_and_by_voice(client):
     assert 'id="autoopen"' in html and "function showCoachWindows(" in html and 'id="openPrompt"' in html
     assert "Coach, show overlay" in html
     assert "v.play().catch(()=>{});   // not awaited" in html     # a frameless share must not stall go live
+
+
+def test_overlay_is_embedded_in_the_live_view_and_theater_exists(client):
+    """The recording lesson: arrows, tasks and memes must be visible inside the dashboard itself."""
+    html = client[0].get("/").text
+    assert 'id="ovFrame"' in html and "/overlay?live='+state.live+'&embed=1'" in html
+    assert 'id="theater"' in html and "body.theater" in html and 'id="theaterExit"' in html
+    assert "openCorner(false)" in html and "navigator.userActivation" in html
+    ov = client[0].get("/overlay?live=x&embed=1").text
+    assert "embed=q.get('embed')" in ov or "q.get('embed')" in ov

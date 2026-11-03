@@ -109,6 +109,15 @@
   .timeline .mark.audio{background:var(--amber)} .timeline .mark.both{background:var(--blue-deep)}
   .timeline .head{position:absolute;top:0;bottom:0;width:2px;background:var(--text);display:none}
   .player{box-shadow:var(--shadow)}
+  .ovframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent}
+  /* Theater: the live view and the chat, nothing else, for playing and recording */
+  body.theater .hero,body.theater #abilitiesCard,body.theater #pbCard,body.theater #dataCard,body.theater #memoryCard,body.theater #clipsCard,body.theater .dock{display:none}
+  body.theater .wrap{grid-template-columns:minmax(0,2.2fr) minmax(320px,.8fr);max-width:1700px;padding-top:16px}
+  body.theater #liveCard>.row:first-child,body.theater #rxBar,body.theater #sdkBox,body.theater #howto{display:none}
+  body.theater #liveCard{padding:10px}
+  body.theater .coach{min-height:420px}
+  #theaterExit{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:6;display:none}
+  body.theater #theaterExit{display:inline-flex}
   .icon:hover{background:var(--blue-tint)}
   .avatar{background:linear-gradient(145deg,#1877F2,#6D5BFF)}
   .brand .mark{background:linear-gradient(145deg,#1877F2,#6D5BFF)}
@@ -274,6 +283,7 @@
   <a class="btn ghost" href="https://github.com/agamble33/coach-sidekick" target="_blank" rel="noopener">Source</a>
 </header>
 
+<button id="theaterExit" class="btn secondary">Exit theater</button>
 <nav class="dock" aria-label="Sections">
   <a href="#hero" data-go="hero,liveCard,matchCard"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>Play</span></a>
   <a href="#abilitiesCard" data-go="abilitiesCard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Abilities</span></a>
@@ -313,8 +323,9 @@
         <div class="row">
           <label class="toggle" title="Coach looks on its own and calls out only when something matters"><input id="autowatch" type="checkbox" checked> Auto callouts</label>
           <button id="cornerbtn" class="btn secondary" title="A small window with Coach that stays on top of your game">Corner mode</button>
-          <label class="toggle" title="Open the Overlay and Corner chat windows on their own when you go live"><input id="autoopen" type="checkbox" checked> Open Coach windows</label>
+          <label class="toggle" title="Open the Overlay and Corner chat windows on their own when you go live"><input id="autoopen" type="checkbox"> Open Coach windows</label>
           <button id="openPrompt" class="btn" hidden title="Your browser wants a click before Coach can open its windows">Show Coach</button>
+          <button id="theater" class="btn" title="Big live view with Coach's arrows, tasks and memes drawn right on it, plus the chat. Best for playing and recording.">Theater</button>
           <button id="overlaybtn" class="btn secondary" title="Transparent page with Coach's pointers and task list: add it to OBS as a browser source, or open it over the game">Overlay</button>
           <button id="overlayhide" class="btn secondary" title="Hide or show the overlay (also the H key on this page, Ctrl+Shift+O in the PC overlay app)">Hide overlay (H)</button>
           <label class="toggle" title="Keep the task list off your game's minimap or chat">Tasks <select id="lay_tasks"><option value="bl">bottom left</option><option value="br">bottom right</option><option value="tl">top left</option><option value="tr">top right</option></select></label>
@@ -352,7 +363,7 @@
           <li><b>Hands-free:</b> press the headset button next to the mic and say <b>"Coach, where do I go?"</b>. <b>"Coach, stop talking"</b> mutes, <b>"Coach, talk to me"</b> unmutes.</li>
         </ol>
       </details>
-      <div class="player"><video id="liveVideo" autoplay muted playsinline></video><div class="livebadge" id="liveBadge">LIVE</div></div>
+      <div class="player" id="livePlayer"><video id="liveVideo" autoplay muted playsinline></video><iframe id="ovFrame" class="ovframe" title="Coach overlay" allow="autoplay" hidden></iframe><div class="livebadge" id="liveBadge">LIVE</div></div>
       <canvas id="grab" hidden></canvas>
     </div>
 
@@ -712,12 +723,13 @@
   const CORNER_HTML=`<div class="top"><div class="av">C</div><div><b>Coach</b><div class="st" id="cstate">Not live</div></div><div class="dot" id="cdot"></div></div>
     <div class="last" id="clast">Waiting for the first callout.</div>
     <div class="bar"><button id="cask">Ask Coach</button><button id="ctalk">Talk</button><button class="stop" id="cstop">Stop</button></div>`;
-  async function openCorner(){
-    if(corner && !corner.closed){ corner.focus(); return; }
+  async function openCorner(quiet){
+    if(corner && !corner.closed){ corner.focus(); return true; }
     try{
-      if('documentPictureInPicture' in window){ corner=await documentPictureInPicture.requestWindow({width:330,height:160}); }
+      const active=!navigator.userActivation || navigator.userActivation.isActive;
+      if('documentPictureInPicture' in window && active){ corner=await documentPictureInPicture.requestWindow({width:330,height:160}); }
       else { corner=window.open('','coachCorner','popup=yes,width=330,height=160'); if(!corner) throw new Error('pop-ups are blocked for this page'); }
-    }catch(e){ add('msg err','Corner mode could not open: '+e.message); corner=null; return; }
+    }catch(e){ if(!quiet) add('msg err','Corner mode could not open: '+e.message); corner=null; return false; }
     const d=corner.document; d.title='Coach';
     const st=d.createElement('style'); st.textContent=CORNER_CSS; d.head.appendChild(st); d.body.innerHTML=CORNER_HTML;
     d.getElementById('cask').onclick=()=>{ window.focus(); $('input').focus(); };
@@ -750,9 +762,11 @@
       add('msg from-coach',"I'm watching your screen. Play normally; I'll call out when something matters, or ask me anything.");
       setStatus('Watching your game', true);
       if($('autoopen').checked) await showCoachWindows();
-      else add('msg tip','Tip: <b>Overlay</b> puts arrows, tasks and memes over your game; <b>Corner mode</b> keeps the chat on top.');
+      else add('msg tip','Coach draws arrows, tasks and memes right on the live view above. Click <b>Theater</b> for the big version (great for recording). <b>Overlay</b> opens the same thing as its own window for OBS or VR.');
+      try{ if(localStorage.getItem('coachTheater')==='1') setTheater(true); }catch(e){}
       state.frameTimer=setInterval(pushFrame, FRAME_EVERY_MS); pushFrame();
       overlayHidden=false; $('overlayhide').textContent='Hide overlay (H)'; pushOverlaySettings(); sdkSync();
+      $('ovFrame').src='/overlay?live='+state.live+'&embed=1'; $('ovFrame').hidden=false; $('liveBadge').hidden=true;   // the overlay has its own badge
       state.watchTimer=setInterval(()=>{ if(!$('autowatch').checked || state.busy) return; if(!state.sceneChanged){ setStatus('Screen unchanged, Coach is holding', false); return; } state.sceneChanged=false; send('',{watch:true}); }, WATCH_EVERY_MS);
     }catch(e){ add('msg err','Could not start live mode: '+e.message); }
   }
@@ -776,9 +790,10 @@
     const id=state.live; state.live=null; state.liveStream=null;
     fetch(`/api/live/${id}/stop`,{method:'POST'}).catch(()=>{});
     $('liveCard').hidden=true; if(state.match) $('matchCard').hidden=false; else $('hero').hidden=false; tipsMode('match');
+    $('ovFrame').hidden=true; $('ovFrame').src='about:blank'; $('liveBadge').hidden=false; document.body.classList.remove('theater');
     setStatus('Ready when you are', false); add('msg from-coach','Stopped watching. Load a match or go live again whenever.'); cornerSync();
   }
-  $('golive').onclick=goLive; $('golive2').onclick=goLive; $('stoplive').onclick=stopLive; $('cornerbtn').onclick=openCorner;
+  $('golive').onclick=goLive; $('golive2').onclick=goLive; $('stoplive').onclick=stopLive; $('cornerbtn').onclick=()=>openCorner(false);
   // ---- overlay layout and the Coach key ----
   // The layout is kept per browser and pushed to the live session, so the overlay page, the
   // PC app and an OBS source all place the panels the same way. H toggles the overlay.
@@ -827,8 +842,11 @@
   let overlayHidden=false;
   async function toggleOverlay(){ if(!state.live) return; overlayHidden=!overlayHidden; $('overlayhide').textContent=(overlayHidden?'Show overlay (H)':'Hide overlay (H)'); await pushOverlaySettings({hidden:overlayHidden}); }
   $('overlayhide').onclick=toggleOverlay;
+  function setTheater(on){ document.body.classList.toggle('theater', on); try{ localStorage.setItem('coachTheater', on?'1':'0'); }catch(e){} if(on) window.scrollTo({top:0}); }
+  $('theater').onclick=()=>setTheater(true); $('theaterExit').onclick=()=>setTheater(false);
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && document.body.classList.contains('theater')) setTheater(false); });
   $('openPrompt').onclick=async()=>{ if(await showCoachWindows()) $('openPrompt').hidden=true; };
-  try{ $('autoopen').checked=localStorage.getItem('coachAutoOpen')!=='0'; }catch(e){}
+  try{ $('autoopen').checked=localStorage.getItem('coachAutoOpen')==='1'; }catch(e){}
   $('autoopen').onchange=e=>{ try{ localStorage.setItem('coachAutoOpen', e.target.checked?'1':'0'); }catch(x){} };
   addEventListener('keydown',e=>{ if((e.key==='h'||e.key==='H') && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) toggleOverlay(); });
   let overlayWin=null;
@@ -842,8 +860,8 @@
   }
   async function showCoachWindows(){
     // Overlay (arrows, tasks, memes) plus Corner mode (chat). Both need a recent click; otherwise ask for one.
-    const ok=openOverlay(); if(ok) await openCorner();
-    if(!ok){ $('openPrompt').hidden=false; add('msg tip','Your browser blocked the Coach windows. Click <b>Show Coach</b> once, or allow pop-ups for this page and it will be automatic next time.'); }
+    const ok=openOverlay(); if(ok) await openCorner(true);
+    if(!ok){ $('openPrompt').hidden=false; add('msg tip','Your browser wants a click before Coach can open its windows. Click <b>Show Coach</b>, or just use <b>Theater</b>: the overlay is already drawn on the live view here.'); }
     return ok;
   }
   $('overlaybtn').onclick=async()=>{

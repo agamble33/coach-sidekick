@@ -64,6 +64,7 @@
   .wp .lbl{background:rgba(8,12,24,.85);padding:3px 9px;border-radius:9999px;font-weight:700;font-size:13px;white-space:nowrap}
   #guideTag{position:absolute;top:10px;left:50%;transform:translate(-50%,42px);font-size:11px;letter-spacing:.12em;font-weight:800;color:#19e68c;background:rgba(8,12,24,.75);padding:3px 10px;border-radius:9999px;pointer-events:none}
   #guideTag[hidden]{display:none}
+  html.embed{font-size:13px} html.embed #sound{bottom:50%;transform:translate(-50%,50%);font-size:15px;padding:10px 16px}
 </style>
 </head>
 <body>
@@ -79,7 +80,8 @@
 </div>
 <script>
   const q=new URLSearchParams(location.search);
-  const live=q.get('live'); const demo=q.get('demo')==='1';
+  const live=q.get('live'); const demo=q.get('demo')==='1'; const embed=q.get('embed')==='1';
+  if(embed){ document.documentElement.classList.add('embed'); }
   const $=id=>document.getElementById(id);
   const CALLOUT_SHOW_S=8;
   let lastReactionTs=null, reactionTimer=null, lastAvatar=null, pendingSound=null;
