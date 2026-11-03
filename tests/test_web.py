@@ -514,3 +514,35 @@ def test_game_sdk_box_and_docs_present(client):
     root = Path(webapp.__file__).resolve().parent.parent
     assert (root / "docs" / "game-sdk.md").is_file()
     assert (root / "sdk" / "unity" / "CoachClient.cs").is_file() and (root / "sdk" / "unity" / "CoachArrow.cs").is_file()
+
+
+def test_guard_caps_turns_and_frames(client, monkeypatch):
+    from coach.guard import Guard, Limits
+    c, webapp = client
+    webapp.app.state.guard = Guard(webapp.DATA / "budget-test.json", Limits(turns_per_min=2, frames_per_min=1))
+    assert c.get("/api/guard").json()["per_minute"]["turns"] == 2
+    lid = c.post("/api/live/start").json()["live_id"]
+    jpeg = b"\xff\xd8" + b"\x00" * 100
+    assert c.post(f"/api/live/{lid}/frame", files={"file": ("f.jpg", jpeg, "image/jpeg")}).status_code == 200
+    r = c.post(f"/api/live/{lid}/frame", files={"file": ("f.jpg", jpeg, "image/jpeg")})
+    assert r.status_code == 429 and "breather" in r.json()["detail"]
+    # turns: the cap fires before any model call
+    for _ in range(2):
+        c.post("/api/turn", json={"live_id": lid, "text": "hi"})
+    r = c.post("/api/turn", json={"live_id": lid, "text": "hi"})
+    assert r.status_code == 429
+    webapp.app.state.guard.disabled = True
+    assert c.post("/api/turn", json={"live_id": lid, "text": "hi"}).status_code == 503
+    webapp.app.state.guard.disabled = False
+    c.post(f"/api/live/{lid}/stop")
+
+
+def test_profile_api(client):
+    c, webapp = client
+    assert c.get("/api/profile").json() == {"games": {}}
+    r = c.put("/api/profile", json={"game": "Kid Kart", "category": "controls", "name": "invert_y", "value": "on"})
+    assert r.status_code == 200 and r.json()["game"] == "kid kart"
+    assert c.put("/api/profile", json={"game": "x", "category": "weather", "name": "a", "value": "b"}).status_code == 400
+    assert c.get("/api/profile").json()["games"]["kid kart"]["invert_y"]["value"] == "on"
+    assert c.delete("/api/profile", params={"game": "Kid Kart", "name": "invert_y"}).json()["removed"] == 1
+    assert c.get("/api/profile").json() == {"games": {}}

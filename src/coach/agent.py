@@ -10,13 +10,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from .coach_llm import COACH_SYSTEM, DEFAULT_MODEL
+from .coach_llm import COACH_SYSTEM, DEFAULT_MODEL, OFF_TOPIC_MARK
 from .meta_api import MetaAPIError, MetaClient
 from .tools import Session, run_tool, tool_specs
 
 MAX_ROUNDS = 8
 # what a watch/teach tick can use: the overlay tools are in so Coach can point and set tasks on its own
-LIVE_TICK_TOOLS = ["look_now", "callout", "highlight", "react", "set_tasks", "task_done", "remember", "recall", "report_concern"]
+LIVE_TICK_TOOLS = ["look_now", "callout", "highlight", "react", "set_tasks", "task_done", "remember", "recall", "my_preferences", "report_concern"]
 GUIDE_TOOLS = ["point", "route"]   # offered only while the player has Guide me on
 AGENT_SYSTEM = COACH_SYSTEM + (
     " You have tools: look_now sees the player's live screen, look sees a loaded match video at a time, "
@@ -25,6 +25,8 @@ AGENT_SYSTEM = COACH_SYSTEM + (
     "the top-left) to point at a thing; set_tasks and task_done keep the player's on-screen task list. "
     "react flashes a meme reaction card with a sound for a moment worth a laugh (a missed jump, a dumb play, an "
     "ignored callout, flirting mid-match, a clutch); at most one per moment, it has its own cooldowns. "
+    "remember_preference and my_preferences keep the player's own settings (controls, sound, display, play style) per "
+    "game; when a game starts and you know their preferences, offer once to set it up the way they like. "
     "report_concern files a safety report for a human when you see cheating or a hack, a game-breaking bug, "
     "bullying in chat, or an adult seeking personal contact with a child; never confront anyone yourself. "
     "Prefer acting over describing what you could do. After acting, reply in one or two short sentences."
@@ -62,6 +64,10 @@ def instructions_for(session: Session) -> str:
     game = session.game_state.as_prompt()
     if game:
         text += "\n\n" + game
+    if session.profile is not None:
+        prof = session.profile.as_prompt(session.game)
+        if prof:
+            text += "\n\n" + prof
     if session.playbook is not None:
         text += "\n\n" + session.playbook.as_prompt()
         if session.teach:
@@ -82,6 +88,7 @@ class TurnResult:
     input_tokens: int = 0
     output_tokens: int = 0
     record_id: str = ""
+    offtopic: bool = False     # the scope rule fired: Coach redirected to the game
 
 
 def _split_output(resp: dict) -> tuple[list[dict], str]:
@@ -104,6 +111,7 @@ class CoachAgent:
         self.on_event = on_event or (lambda kind, data: None)   # ("tool_call"|"tool_result"|"text", dict)
         self.last_response_id: str | None = None
         self.tools = tool_specs()
+        self.offtopic = 0          # replies that started with the Offside marker (scope rule fired)
 
     def tools_names(self) -> list[str]:
         return [t["name"] for t in self.tools]
@@ -171,6 +179,10 @@ class CoachAgent:
         else:
             result.text = result.text or "Let me pause there. What do you want me to do next?"
         self.last_response_id = result.response_id
+        if result.text.lstrip().lower().startswith(OFF_TOPIC_MARK.lower()):
+            self.offtopic += 1
+            result.offtopic = True
+            result.text = result.text.lstrip()[len(OFF_TOPIC_MARK):].lstrip(" .:,-") or "I only do game stuff. What's happening on screen?"
         rid = "" if (is_tick or result.text.strip().lower() == "quiet") else self.session.record("reply", result.text, player_text)
         result.record_id = rid
         self.on_event("text", {"text": result.text, "record_id": rid})

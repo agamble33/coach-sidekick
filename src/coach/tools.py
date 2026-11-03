@@ -26,6 +26,7 @@ from .moments import MomentError, pick_clips
 from .voice import speak
 from .reactions.engine import ReactionEngine
 from .gamestate import GameState
+from .profile import CATEGORIES as PREF_CATEGORIES, PlayerProfile
 
 VISION_MODEL = os.environ.get("META_MODEL", "muse-spark-1.3-contributor")
 LIVE_MAX_FRAME_BYTES = 2 * 1024 * 1024
@@ -196,6 +197,7 @@ class Session:
     overlay: Overlay = field(default_factory=Overlay)
     reactions: ReactionEngine = field(default_factory=lambda: ReactionEngine(spice="mild", pack="3d"))
     game_state: GameState = field(default_factory=GameState)   # Gate 12: what an SDK-integrated game reports
+    profile: "PlayerProfile | None" = None                       # Gate 13: the player's preferences per game
     incidents: IncidentStore | None = None
     live_id: str = ""
     _info: VideoInfo | None = None
@@ -371,6 +373,30 @@ def t_react(s: Session, args: dict) -> str:
     return f"reacted {trigger}: {payload['line']}"
 
 
+def t_remember_preference(s: Session, args: dict) -> str:
+    """Save how the player likes a game set up (controls, sound, display, play style)."""
+    if s.profile is None:
+        return "no profile store attached"
+    game = str(args.get("game") or s.game)
+    rec = s.profile.set(game, str(args.get("category", "")), str(args.get("name", "")), str(args.get("value", "")))
+    s.record("callout", f"[preference] {rec['game']}: {rec['name']}={rec['value']}")
+    return f"saved for {rec['game']}: {rec['category']} {rec['name']} = {rec['value']}"
+
+
+def t_my_preferences(s: Session, args: dict) -> str:
+    """Read the player's saved preferences for this game (or all games)."""
+    if s.profile is None:
+        return "no profile store attached"
+    scope = str(args.get("scope", "this_game"))
+    games = s.profile.games() if scope == "all" else [str(args.get("game") or s.game)]
+    out = []
+    for g in games:
+        prefs = s.profile.get(g)
+        if prefs:
+            out.append(f"[{g}] " + "; ".join(f"{n} ({e['category']}) = {e['value']}" for n, e in prefs.items()))
+    return "\n".join(out) or "nothing saved yet"
+
+
 def t_report_concern(s: Session, args: dict) -> str:
     """File a safety report for a human to review. Coach never acts on it itself."""
     category = str(args.get("category", "")).strip().lower()
@@ -512,6 +538,17 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool("callout", "Say something to the player out loud right now, like a teammate on voice chat.",
          {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"],
           "additionalProperties": False}, t_callout),
+    Tool("remember_preference", "Save how the player likes this game set up, so next time Coach can get it right: a control "
+         "binding or sensitivity, a sound level, a display setting (brightness, FOV), or how they like to play.",
+         {"type": "object", "properties": {"category": {"type": "string", "enum": list(PREF_CATEGORIES)},
+                                           "name": {"type": "string", "description": "e.g. look_sensitivity, master_volume, brightness, invert_y"},
+                                           "value": {"type": "string", "description": "e.g. 6, 40%, inverted, on"},
+                                           "game": {"type": "string", "description": "defaults to the current game; 'any game' for everything"}},
+          "required": ["category", "name", "value"], "additionalProperties": False}, t_remember_preference),
+    Tool("my_preferences", "Read the player's saved preferences for this game, or for all games.",
+         {"type": "object", "properties": {"scope": {"type": "string", "enum": ["this_game", "all"]},
+                                           "game": {"type": "string"}},
+          "additionalProperties": False}, t_my_preferences),
     Tool("report_concern", "File a safety report for a human reviewer when you see cheating or a hack, a game-breaking "
          "bug, bullying or harassment in chat, or an adult trying to get personal contact with a child. Say exactly what "
          "you saw. Coach never acts on it; a person does.",

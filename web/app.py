@@ -33,10 +33,12 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from coach.gamestate import GameState
+from coach.guard import Guard, GuardError, Limits
+from coach.profile import PlayerProfile
 from pydantic import BaseModel, Field
 
 from coach.agent import TEACH_PROMPT, WATCH_PROMPT, CoachAgent
@@ -144,6 +146,23 @@ def _client_factory() -> MetaClient:
 app.state.client_factory = _client_factory
 app.state.transcribe = transcribe_file
 app.state.memory = MatchMemory(DATA / "memory.json")
+app.state.profile = PlayerProfile(DATA / "profile.json")
+app.state.guard = Guard(DATA / "budget.json", Limits.from_env(), disabled=os.environ.get("COACH_DISABLED", "") in ("1", "true", "yes"))
+
+
+def _subject(request: Request) -> str:
+    """Who to count against: the consent id when present, else the client address."""
+    cid = request.headers.get("x-coach-consent") or ""
+    return cid[:32] if cid else (request.client.host if request.client else "anon")
+
+
+def _guard(request: Request, kind: str) -> str:
+    sub = _subject(request)
+    try:
+        app.state.guard.check(kind, sub)
+    except GuardError as exc:
+        raise HTTPException(exc.status, exc.message)
+    return sub
 app.state.playbooks = PlaybookStore(DATA / "playbook.json")
 app.state.annotations = AnnotationStore(DATA / "annotations" / "records.jsonl")
 app.state.incidents = IncidentStore(DATA / "incidents" / "incidents.jsonl")
@@ -277,7 +296,7 @@ def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
             except MetaAPIError as exc:
                 raise HTTPException(503, str(exc))
             session = Session(work_dir=Path(meta["video"]).parent if meta else DATA / "scratch",
-                              memory=app.state.memory,
+                              memory=app.state.memory, profile=app.state.profile,
                               match=meta["name"] if meta else ("live session" if live_id else "no match"),
                               video=meta["video"] if meta else None, client=client, live=feed,
                               annotations=app.state.annotations, incidents=app.state.incidents,
@@ -300,7 +319,8 @@ def live_start(consent: str = Depends(require_consent)):
 
 
 @app.post("/api/live/{lid}/frame")
-async def live_frame(lid: str, file: UploadFile = File(...)):
+async def live_frame(lid: str, request: Request, file: UploadFile = File(...)):
+    _guard(request, "frames")
     feed = _live.get(lid)
     if feed is None:
         raise HTTPException(404, "live session not found")
@@ -473,6 +493,40 @@ def game_state_out(lid: str):
     return agent.session.game_state.snapshot() if agent else GameState().snapshot()
 
 
+class PreferenceIn(BaseModel):
+    game: str = "any game"
+    category: str
+    name: str
+    value: str
+
+
+@app.get("/api/profile")
+def profile_get():
+    """The player's saved preferences, all games."""
+    return app.state.profile.snapshot()
+
+
+@app.put("/api/profile")
+def profile_put(body: PreferenceIn):
+    try:
+        return app.state.profile.set(body.game, body.category, body.name, body.value)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.delete("/api/profile")
+def profile_delete(game: str, name: str = ""):
+    return {"removed": app.state.profile.forget(game, name)}
+
+
+@app.get("/api/guard")
+def guard_status():
+    """Operator view of the abuse caps: tokens used today, refusals, limits. No per-person data."""
+    st = app.state.guard.status()
+    st["offtopic_redirects"] = sum(a.offtopic for a in _agents.values())
+    return st
+
+
 @app.get("/api/reactions")
 def reactions_catalog():
     """What the reaction feature offers (spice levels, packs, avatars, triggers) for the settings panel."""
@@ -504,7 +558,8 @@ def overlay_demo(lid: str, consent: str = Depends(require_consent)):
 
 
 @app.post("/api/turn")
-def turn(body: TurnIn):
+def turn(body: TurnIn, request: Request):
+    subject = _guard(request, "turns")
     text = (body.text or "").strip()
     if body.watch:
         if not body.live_id:
@@ -522,9 +577,10 @@ def turn(body: TurnIn):
     def work():
         try:
             r = agent.turn(text)
+            app.state.guard.record_usage(subject, r.input_tokens + r.output_tokens)
             q.put(("done", {"text": r.text, "rounds": r.rounds, "input_tokens": r.input_tokens,
                             "output_tokens": r.output_tokens, "spoken": agent.session.spoken[-3:],
-                            "record_id": r.record_id}))
+                            "record_id": r.record_id, "offtopic": r.offtopic}))
         except (MetaAPIError, ValueError) as exc:
             q.put(("error", {"message": str(exc)}))
         except Exception as exc:                       # never leave the stream empty
@@ -547,7 +603,8 @@ def turn(body: TurnIn):
 
 
 @app.post("/api/transcribe")
-async def transcribe(file: UploadFile = File(...), consent: str = Depends(require_consent)):
+async def transcribe(request: Request, file: UploadFile = File(...), consent: str = Depends(require_consent)):
+    _guard(request, "transcribes")
     data = await file.read()
     if len(data) > MAX_AUDIO:
         raise HTTPException(413, "audio is larger than 25 MB")

@@ -42,11 +42,11 @@ public class CoachClient : MonoBehaviour
     public List<CoachLandmark> landmarks = new List<CoachLandmark>();
 
     [Header("Coach directives")]
-    public CoachTextEvent OnCallout;          // say it with your TTS or show it in-world
-    public CoachPointEvent OnPoint;           // draw an arrow at the landmark's transform
-    public CoachRouteEvent OnRoute;           // draw a path through these landmarks in order
-    public CoachReactionEvent OnReaction;     // show the meme card (imageUrl is absolute) and play a sound
-    public CoachTasksEvent OnTasks;           // the task list
+    public CoachTextEvent OnCallout = new CoachTextEvent();          // say it with your TTS or show it in-world
+    public CoachPointEvent OnPoint = new CoachPointEvent();           // draw an arrow at the landmark's transform
+    public CoachRouteEvent OnRoute = new CoachRouteEvent();           // draw a path through these landmarks in order
+    public CoachReactionEvent OnReaction = new CoachReactionEvent();     // show the meme card (imageUrl is absolute) and play a sound
+    public CoachTasksEvent OnTasks = new CoachTasksEvent();           // the task list
 
     public bool Connected { get; private set; }
     public string LastError { get; private set; } = "";

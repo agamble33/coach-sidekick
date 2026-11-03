@@ -10,7 +10,9 @@ public class CoachArrow : MonoBehaviour
     public Vector3 offset = new Vector3(0, 1.6f, 1.2f);
     public float seconds = 12f;
     public float reachDistance = 2f;    // route: advance to the next waypoint within this distance of the current one
-    public TextMesh label;              // optional
+    public TextMesh label;              // optional 3D label
+    public string LabelText { get; private set; } = "";   // for a 2D (OnGUI) label
+    public bool Active => target != null;
 
     Transform target; float until; readonly Queue<Transform> route = new Queue<Transform>();
     Renderer[] renderers;
@@ -21,7 +23,8 @@ public class CoachArrow : MonoBehaviour
     {
         route.Clear();
         target = t; until = Time.time + seconds;
-        if (label != null) label.text = string.IsNullOrEmpty(text) ? landmarkId : text;
+        LabelText = string.IsNullOrEmpty(text) ? landmarkId : text;
+        if (label != null) label.text = LabelText;
         SetVisible(target != null);
     }
 
@@ -31,7 +34,7 @@ public class CoachArrow : MonoBehaviour
         foreach (var s in steps) if (s != null && s.target != null) route.Enqueue(s.target);
         if (route.Count == 0) return;
         target = route.Dequeue(); until = Time.time + seconds * steps.Count;
-        if (label != null) label.text = "1";
+        LabelText = "1"; if (label != null) label.text = LabelText;
         SetVisible(true);
     }
 
@@ -45,7 +48,7 @@ public class CoachArrow : MonoBehaviour
         if (follow != null && route.Count > 0 && Vector3.Distance(follow.position, target.position) < reachDistance)
         {
             target = route.Dequeue();
-            if (label != null) label.text = (int.TryParse(label.text, out var n) ? n + 1 : 2).ToString();
+            LabelText = (int.TryParse(LabelText, out var n) ? n + 1 : 2).ToString(); if (label != null) label.text = LabelText;
         }
         if (label != null && follow != null) label.transform.rotation = Quaternion.LookRotation(label.transform.position - follow.position);
     }
