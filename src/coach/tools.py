@@ -20,10 +20,14 @@ from .ingest import IngestError, VideoInfo, probe, sample_frames
 from .annotations import AnnotationStore
 from .incidents import CATEGORIES, SEVERITIES, IncidentStore, send_alert
 from .memory import MatchMemory
+from .gamebrief import GameBriefStore
 from .playbook import Playbook
 from .meta_api import MetaAPIError, MetaClient
 from .moments import MomentError, pick_clips
 from .voice import speak
+from .reactions.engine import ReactionEngine
+from .gamestate import GameState
+from .profile import CATEGORIES as PREF_CATEGORIES, PlayerProfile
 
 VISION_MODEL = os.environ.get("META_MODEL", "muse-spark-1.3-contributor")
 LIVE_MAX_FRAME_BYTES = 2 * 1024 * 1024
@@ -65,6 +69,10 @@ class Overlay:
     tasks: list[dict] = field(default_factory=list)
     callout: str = ""
     callout_at: float = 0.0
+    reaction: dict | None = None      # last meme reaction card (image, sound, line, ts); the page dedupes on ts
+    guide: bool = False               # Guide me: the player allowed Coach to point and draw routes
+    pointers: list[dict] = field(default_factory=list)   # arrows: where to go / what to look at
+    route: list[dict] = field(default_factory=list)      # numbered waypoints, in order
     updated: float = 0.0
     turn_started: float = 0.0
     hidden: bool = False
@@ -85,6 +93,9 @@ class Overlay:
 
     MAX_HIGHLIGHTS = 5
     MAX_TASKS = 6
+    MAX_POINTERS = 3
+    MAX_ROUTE = 6
+    DIRECTIONS = ("here", "left", "right", "up", "down", "behind")
 
     def touch(self) -> None:
         self.updated = time.time()
@@ -99,6 +110,31 @@ class Overlay:
         self.touch()
         return hl
 
+    def add_pointer(self, x: float, y: float, label: str, direction: str, seconds: float, landmark: str = "") -> dict:
+        if direction not in self.DIRECTIONS:
+            raise ValueError(f"direction must be one of {', '.join(self.DIRECTIONS)}")
+        now = time.time()
+        self.pointers = [p for p in self.pointers if p["until"] > now]
+        p = {"x": round(x, 4), "y": round(y, 4), "label": label, "direction": direction, "landmark": landmark,
+             "seconds": seconds, "created": now, "until": now + seconds}
+        self.pointers.append(p)
+        self.pointers = self.pointers[-self.MAX_POINTERS:]
+        self.touch()
+        return p
+
+    def set_route(self, steps: list[dict], seconds: float) -> list[dict]:
+        now = time.time()
+        self.route = [{"n": i + 1, "x": round(float(st["x"]), 4), "y": round(float(st["y"]), 4),
+                       "label": st.get("label", ""), "landmark": st.get("landmark", ""),
+                       "until": now + seconds, "created": now, "seconds": seconds}
+                      for i, st in enumerate(steps[: self.MAX_ROUTE])]
+        self.touch()
+        return self.route
+
+    def clear_guidance(self) -> None:
+        self.pointers, self.route = [], []
+        self.touch()
+
     def start_turn(self) -> None:
         self.turn_started = time.time()
 
@@ -107,7 +143,7 @@ class Overlay:
         can actually see them, not when Coach drew them mid-turn (the rest of the turn, more
         tool calls and the reply, took longer than the box lived)."""
         now = time.time()
-        for hl in self.highlights:
+        for hl in self.highlights + self.pointers + self.route:
             if hl.get("created", 0) >= self.turn_started > 0:
                 hl["until"] = now + hl.get("seconds", 8)
         self.turn_started = 0.0
@@ -128,11 +164,18 @@ class Overlay:
         self.callout, self.callout_at = text, time.time()
         self.touch()
 
+    def react(self, payload: dict) -> None:
+        self.reaction = payload
+        self.touch()
+
     def snapshot(self) -> dict:
         now = time.time()
         return {"highlights": [hl for hl in self.highlights if hl["until"] > now],
                 "tasks": list(self.tasks), "callout": self.callout, "callout_at": self.callout_at,
-                "hidden": self.hidden, "layout": dict(self.layout),
+                "hidden": self.hidden, "layout": dict(self.layout), "reaction": self.reaction,
+                "guide": self.guide,
+                "pointers": [p for p in self.pointers if p["until"] > now] if self.guide else [],
+                "route": [w for w in self.route if w["until"] > now] if self.guide else [],
                 "updated": self.updated, "now": now}
 
 
@@ -153,13 +196,22 @@ class Session:
     last_observation: str = ""
     last_record_id: str = ""
     overlay: Overlay = field(default_factory=Overlay)
+    reactions: ReactionEngine = field(default_factory=lambda: ReactionEngine(spice="mild", pack="classic"))
+    game_state: GameState = field(default_factory=GameState)   # Gate 12: what an SDK-integrated game reports
+    profile: "PlayerProfile | None" = None                       # Gate 13: the player's preferences per game
     incidents: IncidentStore | None = None
     live_id: str = ""
+    game_name: str = ""            # what Coach identified from the screen (set_game), used when there is no playbook or SDK name
+    briefs: "GameBriefStore | None" = None   # auto game brief written from the model's own knowledge when the game is named
     _info: VideoInfo | None = None
 
     @property
     def game(self) -> str:
-        return self.playbook.game if self.playbook else self.match
+        if self.playbook:
+            return self.playbook.game
+        if self.game_state.game:
+            return self.game_state.game
+        return self.game_name or self.match
 
     def record(self, kind: str, text: str, player_text: str = "") -> str:
         """Write an annotation record if a store is attached; returns its id or ''."""
@@ -303,6 +355,19 @@ def t_recall(s: Session, args: dict) -> str:
     return "\n".join(f"[{n.match}] {n.text}" for n in notes)
 
 
+def t_set_game(s: Session, args: dict) -> str:
+    """Record which game the player is in, once Coach can tell from the screen or the player says."""
+    name = " ".join(str(args.get("name", "")).split())[:60]
+    if not name:
+        raise ValueError("name is required")
+    if s.game_state.game and s.game_state.game.lower() != name.lower():
+        return f"the game reports itself as {s.game_state.game}; keeping that"
+    s.game_name = name
+    s.record("callout", f"[game] {name}")
+    brief = s.briefs.ensure(name, s.client) if s.briefs is not None else ""
+    return f"game set to {name}" + ("; brief ready" if brief else "")
+
+
 def t_callout(s: Session, args: dict) -> str:
     text = " ".join(str(args.get("text", "")).split())[:300]
     if not text:
@@ -312,6 +377,44 @@ def t_callout(s: Session, args: dict) -> str:
     s.record("callout", text)
     backend = speak(text) if s.speak_out_loud else "muted"
     return f"said ({backend}): {text}"
+
+
+def t_react(s: Session, args: dict) -> str:
+    """Flash a meme reaction card + sound sting on the overlay. Cooldowns and the spice setting
+    live in the engine, so a suppressed reaction is a normal result, not an error."""
+    trigger = str(args.get("trigger", "")).strip()
+    context = " ".join(str(args.get("context", "")).split())[:200]
+    payload = s.reactions.fire(trigger, context)
+    if payload is None:
+        _, why = s.reactions.can_fire(trigger)
+        return f"no reaction ({why})"
+    s.overlay.react(payload)
+    s.record("react", f"{trigger}: {payload['line']}" + (f" ({context})" if context else ""))
+    return f"reacted {trigger}: {payload['line']}"
+
+
+def t_remember_preference(s: Session, args: dict) -> str:
+    """Save how the player likes a game set up (controls, sound, display, play style)."""
+    if s.profile is None:
+        return "no profile store attached"
+    game = str(args.get("game") or s.game)
+    rec = s.profile.set(game, str(args.get("category", "")), str(args.get("name", "")), str(args.get("value", "")))
+    s.record("callout", f"[preference] {rec['game']}: {rec['name']}={rec['value']}")
+    return f"saved for {rec['game']}: {rec['category']} {rec['name']} = {rec['value']}"
+
+
+def t_my_preferences(s: Session, args: dict) -> str:
+    """Read the player's saved preferences for this game (or all games)."""
+    if s.profile is None:
+        return "no profile store attached"
+    scope = str(args.get("scope", "this_game"))
+    games = s.profile.games() if scope == "all" else [str(args.get("game") or s.game)]
+    out = []
+    for g in games:
+        prefs = s.profile.get(g)
+        if prefs:
+            out.append(f"[{g}] " + "; ".join(f"{n} ({e['category']}) = {e['value']}" for n, e in prefs.items()))
+    return "\n".join(out) or "nothing saved yet"
 
 
 def t_report_concern(s: Session, args: dict) -> str:
@@ -346,6 +449,68 @@ def t_highlight(s: Session, args: dict) -> str:
     hl = s.overlay.add_highlight(x, y, w, h, label, seconds)
     where = f"({hl['x']:.2f}, {hl['y']:.2f})"
     return f"highlighted {label or 'spot'} at {where} for {seconds:g}s"
+
+
+GUIDE_OFF = "guide mode is off: the player has not turned on Guide me, so do not point; use callout instead"
+
+
+def _resolve_landmark(s: Session, args: dict) -> tuple[dict, str]:
+    """If the model named a landmark the game reported, fill x, y, direction and label from it."""
+    lid = " ".join(str(args.get("landmark", "")).split())
+    if not lid:
+        return args, ""
+    lm = s.game_state.landmark(lid)
+    if lm is None:
+        known = ", ".join(list(s.game_state.landmarks)[:12]) or "none reported by the game"
+        raise ValueError(f"unknown landmark {lid!r}; known: {known}")
+    out = dict(args)
+    out.setdefault("label", lm.label)
+    if lm.visible and lm.screen:
+        out["x"], out["y"], out["direction"] = lm.screen[0], lm.screen[1], "here"
+    else:
+        d = lm.dir if lm.dir in Overlay.DIRECTIONS else "ahead"
+        edge = {"left": (0.06, 0.5), "right": (0.94, 0.5), "up": (0.5, 0.1), "down": (0.5, 0.9),
+                "behind": (0.5, 0.14), "ahead": (0.5, 0.2)}[d]
+        out["x"], out["y"] = edge
+        out["direction"] = "behind" if d == "ahead" else d
+        if d == "ahead":
+            out["direction"] = "up"
+    return out, lm.id
+
+
+def t_point(s: Session, args: dict) -> str:
+    """Draw an arrow at a screen spot (or at the screen edge toward something off screen)."""
+    if not s.overlay.guide:
+        return GUIDE_OFF
+    args, landmark = _resolve_landmark(s, args)
+    x = _num(args, "x", lo=0, hi=1); y = _num(args, "y", lo=0, hi=1)
+    label = " ".join(str(args.get("label", "")).split())[:40]
+    direction = str(args.get("direction", "here")).strip().lower() or "here"
+    seconds = max(8.0, _num(args, "seconds", 12, 1, 60))
+    p = s.overlay.add_pointer(x, y, label, direction, seconds, landmark)
+    where = "here" if direction == "here" else f"off screen, {direction}"
+    s.record("callout", f"[point] {label or 'go'} {where}")
+    return f"pointed {label or 'there'} ({where}) at ({p['x']:.2f}, {p['y']:.2f}) for {seconds:g}s"
+
+
+def t_route(s: Session, args: dict) -> str:
+    """Draw numbered waypoints the player should follow, in order."""
+    if not s.overlay.guide:
+        return GUIDE_OFF
+    raw = args.get("steps")
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("steps must be a list of {x, y, label}")
+    steps = []
+    for st in raw[: Overlay.MAX_ROUTE]:
+        if not isinstance(st, dict):
+            raise ValueError("each step must be an object with x, y, label")
+        st, landmark = _resolve_landmark(s, st)
+        steps.append({"x": _num(st, "x", lo=0, hi=1), "y": _num(st, "y", lo=0, hi=1),
+                      "label": " ".join(str(st.get("label", "")).split())[:30], "landmark": landmark})
+    seconds = max(10.0, _num(args, "seconds", 20, 1, 90))
+    route = s.overlay.set_route(steps, seconds)
+    s.record("callout", "[route] " + " > ".join(w["label"] or f"step {w['n']}" for w in route))
+    return f"route with {len(route)} steps for {seconds:g}s: " + " > ".join(w["label"] or str(w["n"]) for w in route)
 
 
 def t_set_tasks(s: Session, args: dict) -> str:
@@ -390,9 +555,25 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
          {"type": "object", "properties": {"scope": {"type": "string", "enum": ["all", "this_match"]},
                                            "limit": {"type": "integer", "minimum": 1, "maximum": 50}},
           "additionalProperties": False}, t_recall),
+    Tool("set_game", "Record which game the player is playing, as soon as you can tell from the screen or they say it. "
+         "Use the common title (e.g. Fortnite, Beat Saber, Call of Duty Warzone). Call it once; call again only if the game changes.",
+         {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"], "additionalProperties": False}, t_set_game),
     Tool("callout", "Say something to the player out loud right now, like a teammate on voice chat.",
          {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"],
           "additionalProperties": False}, t_callout),
+    Tool("remember_preference", "Save how the player likes this game set up, so next time Coach can get it right: a control "
+         "binding or sensitivity, a sound level, a display setting (brightness, FOV), how they like to play, or a skill "
+         "note: something you have seen them do well or struggle with (category skills, e.g. name=aim value=strong, "
+         "name=map_awareness value=weak, loses track of flanks).",
+         {"type": "object", "properties": {"category": {"type": "string", "enum": list(PREF_CATEGORIES)},
+                                           "name": {"type": "string", "description": "e.g. look_sensitivity, master_volume, brightness, invert_y, aim, map_awareness"},
+                                           "value": {"type": "string", "description": "e.g. 6, 40%, inverted, on"},
+                                           "game": {"type": "string", "description": "defaults to the current game; 'any game' for everything"}},
+          "required": ["category", "name", "value"], "additionalProperties": False}, t_remember_preference),
+    Tool("my_preferences", "Read the player's saved preferences for this game, or for all games.",
+         {"type": "object", "properties": {"scope": {"type": "string", "enum": ["this_game", "all"]},
+                                           "game": {"type": "string"}},
+          "additionalProperties": False}, t_my_preferences),
     Tool("report_concern", "File a safety report for a human reviewer when you see cheating or a hack, a game-breaking "
          "bug, bullying or harassment in chat, or an adult trying to get personal contact with a child. Say exactly what "
          "you saw. Coach never acts on it; a person does.",
@@ -408,6 +589,25 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
                                            "label": {"type": "string", "description": "two or three words"},
                                            "seconds": {"type": "number", "description": "how long to show, 8 to 30 (default 10)"}},
           "required": ["x", "y"], "additionalProperties": False}, t_highlight),
+    Tool("react", ReactionEngine(validate_assets=False).tool_schema()["function"]["description"],
+         ReactionEngine(validate_assets=False).tool_schema()["function"]["parameters"], t_react),
+    Tool("point", "Guide me only. Draw an arrow on the player's screen at where to go or what to look at. x, y are fractions of "
+         "the screen from the top-left (0 to 1). If the target is off screen, give the direction and an x, y near that edge.",
+         {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"},
+                                           "label": {"type": "string", "description": "two or three words, e.g. 'Exit' or 'Health'"},
+                                           "direction": {"type": "string", "enum": list(Overlay.DIRECTIONS),
+                                                         "description": "here if the spot is on screen, else which way to turn"},
+                                           "landmark": {"type": "string", "description": "id of a landmark from GAME STATE; then x, y may be 0 and are filled in"},
+                                           "seconds": {"type": "number", "description": "how long to show, 8 to 60 (default 12)"}},
+          "required": ["x", "y"], "additionalProperties": False}, t_point),
+    Tool("route", "Guide me only. Draw numbered waypoints the player should follow in order (2 to 6), each with x, y "
+         "fractions of the screen and a short label. Use for 'how do I get to X' with several steps.",
+         {"type": "object", "properties": {"steps": {"type": "array", "minItems": 1, "maxItems": 6, "items": {
+             "type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "label": {"type": "string"},
+                                              "landmark": {"type": "string", "description": "landmark id from GAME STATE"}},
+             "required": ["x", "y"], "additionalProperties": False}},
+                                           "seconds": {"type": "number", "description": "10 to 90 (default 20)"}},
+          "required": ["steps"], "additionalProperties": False}, t_route),
     Tool("set_tasks", "Replace the player's on-screen task list with the next things to do, in order (1 to 6 short lines).",
          {"type": "object", "properties": {"tasks": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 6}},
           "required": ["tasks"], "additionalProperties": False}, t_set_tasks),

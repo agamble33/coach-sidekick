@@ -35,10 +35,10 @@ class Scripted:
         return 200, json.dumps(self.responses.pop(0)).encode()
 
 
-def make_agent(tmp_path, transport, match=None):
+def make_agent(tmp_path, transport, match=None, threading="local"):
     session = Session(work_dir=tmp_path, memory=MatchMemory(tmp_path / "m.json"), match="t",
                       video=str(match) if match else None)
-    return CoachAgent(MetaClient(load_settings(ENV), transport), session)
+    return CoachAgent(MetaClient(load_settings(ENV), transport), session, threading=threading)
 
 
 def test_plain_text_turn(tmp_path):
@@ -46,14 +46,14 @@ def test_plain_text_turn(tmp_path):
     r = make_agent(tmp_path, t).turn("we won that round")
     assert r.text == "Nice, keep it up." and r.rounds == 1 and r.tool_calls == []
     p = t.payloads[0]
-    assert p["instructions"] == AGENT_SYSTEM and p["tool_choice"] == "auto"
+    assert p["instructions"].startswith(AGENT_SYSTEM) and "GAME: unknown" in p["instructions"] and p["tool_choice"] == "auto"
     assert {x["name"] for x in p["tools"]} >= {"look", "cut_clip", "remember", "recall", "callout"}
     assert "previous_response_id" not in p
 
 
 def test_tool_round_trip_uses_previous_response_id(tmp_path):
     t = Scripted([call("remember", {"note": "they rush B early"}, rid="r1"), msg("Noted.", rid="r2")])
-    agent = make_agent(tmp_path, t)
+    agent = make_agent(tmp_path, t, threading="server")
     r = agent.turn("remember that they rush B early")
     assert r.text == "Noted." and r.rounds == 2
     assert r.tool_calls == [{"name": "remember", "arguments": '{"note": "they rush B early"}',
@@ -72,7 +72,7 @@ def test_parallel_calls_each_get_output(tmp_path):
     ], "usage": {}}
     t = Scripted([two, msg("done", rid="r2")])
     r = make_agent(tmp_path, t).turn("go")
-    outs = {i["call_id"]: i["output"] for i in t.payloads[1]["input"]}
+    outs = {i["call_id"]: i["output"] for i in t.payloads[1]["input"] if i.get("type") == "function_call_output"}
     assert outs["a"] == "said (muted): push" and outs["b"].startswith("error: unknown tool")
     assert r.rounds == 2
 
@@ -85,7 +85,7 @@ def test_round_cap_stops_runaway(tmp_path):
 
 def test_stale_thread_retries_without_previous(tmp_path):
     t = Scripted([msg("fresh", rid="r9")], fail_first_with=400)
-    agent = make_agent(tmp_path, t)
+    agent = make_agent(tmp_path, t, threading="server")
     agent.last_response_id = "expired"
     r = agent.turn("hey")
     assert r.text == "fresh" and t.payloads[0]["previous_response_id"] == "expired"
@@ -176,3 +176,38 @@ def test_ticks_use_the_small_tool_set(tmp_path):
     assert [x["name"] for x in t.payloads[0]["tools"]] == LIVE_TICK_TOOLS
     agent.turn("what now?")
     assert len(t.payloads[1]["tools"]) > len(LIVE_TICK_TOOLS)
+
+
+
+def test_local_threading_sends_calls_and_outputs_without_previous_id(tmp_path):
+    """Default mode: no previous_response_id; round 2 carries the user message, the call and its output."""
+    t = Scripted([call("remember", {"note": "they rush B early"}, rid="r1"), msg("Noted.", rid="r2"), msg("B again, rotate.", rid="r3")])
+    agent = make_agent(tmp_path, t)
+    assert agent.turn("remember that they rush B early").text == "Noted."
+    second = t.payloads[1]
+    assert "previous_response_id" not in second
+    assert [i.get("type", i.get("role")) for i in second["input"]] == ["user", "function_call", "function_call_output"]
+    assert second["input"][1] == {"type": "function_call", "call_id": "call_1", "name": "remember", "arguments": '{"note": "they rush B early"}'}
+    agent.turn("what do they do?")
+    third = t.payloads[2]
+    assert "previous_response_id" not in third
+    roles = [i.get("role") for i in third["input"]]
+    assert roles == ["user", "assistant", "user"] and third["input"][1]["content"][0]["text"] == "Noted."
+
+
+def test_local_history_is_capped_and_ticks_stay_out(tmp_path):
+    from coach.agent import HISTORY_ITEMS, WATCH_PROMPT
+    t = Scripted([msg(f"reply {i}", rid=f"r{i}") for i in range(12)])
+    agent = make_agent(tmp_path, t)
+    for i in range(10):
+        agent.turn(f"question {i}")
+    assert len(agent.history) == HISTORY_ITEMS
+    agent.turn(WATCH_PROMPT)
+    assert all("Watch" not in json.dumps(h) for h in agent.history)
+    agent.reset()
+    assert agent.history == []
+
+
+def test_bad_threading_value_is_refused(tmp_path):
+    with pytest.raises(ValueError):
+        make_agent(tmp_path, Scripted([]), threading="cloud")

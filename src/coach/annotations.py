@@ -81,7 +81,7 @@ class AnnotationStore:
 
     def add(self, game: str, kind: str, text: str, *, player_text: str = "", observation: str = "",
             playbook: str = "", mode: str = "match", frame_jpeg: bytes | None = None, extra: dict | None = None) -> Record:
-        if kind not in ("callout", "reply", "observation"):
+        if kind not in ("callout", "reply", "observation", "react"):
             raise ValueError("kind must be callout, reply or observation")
         text = _clip(text)
         if not text:

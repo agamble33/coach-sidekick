@@ -1,3 +1,5 @@
+<p align="center"><img src="media/coach-logo.png" alt="Coach" width="260"></p>
+
 # Coach
 
 **An in-game AI sidekick.** Coach plays with you, not for you: live strategy while you play, a guide that teaches new players by playing alongside them, and a teammate that remembers what happened last match. It sees the game, hears you, talks back, and acts through tool calls.
@@ -36,6 +38,12 @@ No other model, hosted or local, is called at runtime.
 | Learns from you | Every callout and reply is a record with its frame; thumbs up/down and corrections feed back into Coach's instructions and export as chat-tuning JSONL for Muse open-weight training | Live |
 | Safety reports | Coach files a report, with the evidence frame, when it sees cheating or a hack, a game-breaking bug, bullying in chat, or an adult asking a child for personal details (kids audience in the playbook). A person reviews at /admin/incidents; optional webhook alert; Coach never acts on anyone itself | Live |
 | Overlay and PC app | Highlight boxes, task list and callouts over the game (/overlay, desktop/ Electron app, OBS source, VR pin); movable panels, H or Ctrl+Shift+O to hide | Live |
+| Game brief | The moment Coach names the game it sees, it writes itself a brief from Muse's own knowledge (how it plays, the words players use, modes and levels, rookie mistakes, danger signs), cached per game. set_game tool, src/coach/gamebrief.py | Live |
+| Player profile | Coach remembers how you like each game set up (controls, sound, display, play style) plus skill notes on what you do well and where you struggle, and picks up there next time. remember_preference and my_preferences tools, /api/profile | Live |
+| Guardrails | Per-session rate limits, a daily token budget from real API usage, a kill switch, and a scope rule that keeps Coach on the game (off-topic redirects are counted). See docs/guardrails.md | Live |
+| In-game SDK | Two HTTP calls make Coach part of a game: the game posts player, objective, landmarks and events; Coach returns arrows anchored to landmark ids, routes, callouts and reactions. Unity reference client in sdk/unity, fake game in sdk/python. See docs/game-sdk.md | Live |
+| Guide me | Off by default. Turn it on and Coach shows the way: an arrow at the spot, an edge arrow with a direction when it is off screen, numbered waypoints for multi-step routes. The point and route tools are only offered to the model while Guide me is on | Live |
+| Meme reactions | Coach flashes a meme card with a sound sting on the overlay when you whiff, ignore a callout, pull off a clutch, or start flirting mid-match. Player settings: on/off, spice, 3D or classic style, and who Coach is (Muse Bot, Coach, Dog). See docs/reactions.md | Live |
 | Highlight reel | Clips stitched into a reel with poster frames from Muse Image | On the way |
 
 ## What was built during the hackathon
@@ -58,6 +66,10 @@ Each gate ships with tests and must pass before the next one starts.
 | 7 | Studio playbook and New player mode (teach ticks) | Done |
 | 8 | Gameplay data: annotation records, ratings, learned examples, training export | Done |
 | 9 | Highlight reel with Muse Image, hosted demo | Planned |
+| 10 | Meme reactions: react tool, reaction cards and stings, player settings, avatars | Done |
+| 11 | Guide me: point and route tools gated by player consent, arrows and routes on the overlay | Done |
+| 13 | Guardrails and player profile: rate limits, daily token budget, kill switch, scope and injection rules, per-game preferences (docs/guardrails.md) | Done |
+| 12 | Game SDK: structured game state in, landmark-anchored directives out, event-driven reactions, Unity reference client and fake game (docs/game-sdk.md) | Done (Unity scripts need an in-editor compile) |
 
 ## For judges: how to try Coach in 3 minutes
 
@@ -65,7 +77,7 @@ Each gate ships with tests and must pass before the next one starts.
 2. Click **Use the sample match**. The timeline shows the moments Coach detected (blue = scene change, amber = loud moment).
 3. Click **Clip the biggest moment**. Watch the right panel: Coach calls `find_moments`, `cut_clip` and `remember` itself. Each step card shows the real tool call and result. The clip appears under Highlights, the note under Match memory.
 4. Click **What's happening at 15 seconds?** Coach calls `look`, sends the frame to Muse Spark, and describes it.
-5. **Go live: share my game.** The first time, a consent sheet asks you to agree to the pilot terms (Coach sees the shared screen and hears the mic). Share any window (a gameplay video in another tab works). Every 20 s Coach looks and calls out only if something matters, points at the spot with a highlight box, and keeps a task list. Ask "What should I do next?" any time. Click **Overlay** for the transparent page you can put over a game or into OBS, or **Corner mode** for a small always-on-top Coach window; the `desktop/` app floats the overlay over any game (docs/pc-overlay.md, docs/vr.md).
+5. **Go live: share my game.** The first time, a consent sheet asks you to agree to the pilot terms (Coach sees the shared screen and hears the mic). Share any window (a gameplay video in another tab works). Every 20 s Coach looks and calls out only if something matters, points at the spot with a highlight box, and keeps a task list. Ask "What should I do next?" any time. Click **Overlay** for the transparent page you can put over a game or into OBS, or **Corner mode** for a small always-on-top Coach window; the `desktop/` app floats the overlay over any game (docs/pc-overlay.md, docs/vr.md). Playing a standalone Quest game? Pair Bluetooth earbuds to the PC and wear one: the game and your teammates in one ear, Coach in the other (docs/vr.md, Part 2).
 6. **Studio playbook.** Click **Fill a sample**, **Save playbook**, turn on **New player mode**, then go live. Coach teaches from the playbook as things come up.
 7. **Rate anything** with the thumbs. Thumbs down opens a correction box; the next reply already uses it. **Export training set** writes chat-tuning JSONL.
 8. Hold the **mic** to talk instead of typing (Muse Voice Transcribe).

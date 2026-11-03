@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/static/favicon.png">
 <title>Coach overlay</title>
 <style>
   /* Transparent page meant to sit over the game: an OBS browser source, a Corner mode window,
@@ -23,7 +24,11 @@
   #callout{position:absolute;top:4%;left:50%;transform:translateX(-50%);max-width:70%;background:rgba(8,12,24,.86);border:2px solid #ffd23f;border-radius:14px;padding:10px 16px;font-size:clamp(15px,2.2vw,24px);font-weight:700;text-shadow:0 2px 4px rgba(0,0,0,.6);opacity:0;transition:opacity .25s;pointer-events:none}
   #callout.show{opacity:1}
   #badge{position:absolute;display:flex;align-items:center;gap:7px;background:rgba(8,12,24,.75);border-radius:9999px;padding:5px 11px 5px 6px;font-size:13px;font-weight:700;pointer-events:none}
-  #badge .av{width:22px;height:22px;border-radius:50%;background:#0064e0;display:grid;place-items:center;font-size:12px}
+  #badge .av{width:22px;height:22px;border-radius:50%;background:#0064e0;display:grid;place-items:center;font-size:12px;overflow:hidden}
+  #badge .av img{width:100%;height:100%;object-fit:cover;display:block}
+  #reaction .tag img{width:16px;height:16px;border-radius:50%;vertical-align:-3px;margin-right:5px}
+  #sound{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:#ffd23f;color:#1a1400;font-weight:800;font-size:13px;padding:7px 12px;border-radius:9999px;cursor:pointer;pointer-events:auto;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+  #sound[hidden]{display:none}
   #badge .dot{width:9px;height:9px;border-radius:50%;background:#777}#badge .dot.live{background:#ff4d4d;box-shadow:0 0 8px #ff4d4d}
   #tasks{position:absolute;min-width:220px;max-width:34%;background:rgba(8,12,24,.82);border-radius:12px;padding:10px 12px;pointer-events:none}
   #tasks[hidden]{display:none}
@@ -33,20 +38,54 @@
   #tasks li.done{opacity:.55;text-decoration:line-through}#tasks li.done .bx{background:#ffd23f}
   #note{position:absolute;right:10px;bottom:10px;font-size:12px;color:rgba(255,255,255,.75);background:rgba(8,12,24,.6);padding:4px 8px;border-radius:8px;pointer-events:none}
   #note[hidden]{display:none}
+  /* meme reaction card (bottom-right by default), one card at a time, dismisses itself */
+  #reaction{position:absolute;right:16px;bottom:16px;display:flex;align-items:center;gap:12px;width:min(340px,42%);padding:10px 14px 10px 10px;border-radius:18px;background:rgba(8,12,24,.88);border:1px solid rgba(255,255,255,.1);box-shadow:0 14px 40px rgba(0,0,0,.55);opacity:0;transform:translateY(16px) scale(.96);transition:transform .22s cubic-bezier(.2,.9,.3,1.2),opacity .18s;pointer-events:none}
+  #reaction.show{opacity:1;transform:none}
+  #reaction img{width:96px;height:96px;border-radius:14px;flex:0 0 auto;animation:rpop .42s cubic-bezier(.2,.9,.3,1.3)}
+  #reaction .tag{font-size:11px;letter-spacing:2px;font-weight:700;color:#7db2ff;margin-bottom:3px}
+  #reaction .line{font-size:clamp(14px,1.8vw,19px);font-weight:700;line-height:1.25;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  #reaction.pos-bl{left:16px;right:auto}#reaction.pos-tl{left:16px;top:16px;right:auto;bottom:auto}#reaction.pos-tr{top:16px;bottom:auto}
+  @keyframes rpop{0%{transform:scale(.6) rotate(-6deg)}70%{transform:scale(1.08) rotate(2deg)}100%{transform:none}}
+  /* Guide me: arrows and routes */
+  .ptr{position:absolute;transform:translate(-50%,-100%);pointer-events:none;display:flex;flex-direction:column;align-items:center;animation:bob 1s ease-in-out infinite}
+  .ptr .lbl{background:#19e68c;color:#06301c;font-weight:800;font-size:14px;padding:4px 10px;border-radius:9999px;white-space:nowrap;box-shadow:0 0 0 3px rgba(0,0,0,.45),0 0 18px rgba(25,230,140,.6);margin-bottom:4px}
+  .ptr svg{width:46px;height:46px;filter:drop-shadow(0 0 6px rgba(0,0,0,.7)) drop-shadow(0 0 10px rgba(25,230,140,.7))}
+  .ptr.edge{transform:translate(-50%,-50%);animation:nudge 1s ease-in-out infinite}
+  .ptr.edge svg{width:70px;height:70px}
+  .ptr.left svg{transform:rotate(90deg)}.ptr.right svg{transform:rotate(-90deg)}.ptr.up svg{transform:rotate(180deg)}.ptr.behind svg{transform:rotate(180deg)}
+  .ptr.behind .lbl::after{content:" (turn around)"}
+  @keyframes bob{0%,100%{margin-top:0}50%{margin-top:-8px}}
+  @keyframes nudge{0%,100%{opacity:1}50%{opacity:.55}}
+  #routeSvg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  #routeSvg polyline{fill:none;stroke:#19e68c;stroke-width:4;stroke-dasharray:12 10;stroke-linecap:round;filter:drop-shadow(0 0 6px rgba(0,0,0,.7));animation:dash 1.2s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-22}}
+  .wp{position:absolute;transform:translate(-50%,-50%);pointer-events:none;display:flex;align-items:center;gap:6px}
+  .wp .n{width:30px;height:30px;border-radius:50%;background:#19e68c;color:#06301c;font-weight:900;display:grid;place-items:center;font-size:15px;box-shadow:0 0 0 3px rgba(0,0,0,.45)}
+  .wp .lbl{background:rgba(8,12,24,.85);padding:3px 9px;border-radius:9999px;font-weight:700;font-size:13px;white-space:nowrap}
+  #guideTag{position:absolute;top:10px;left:50%;transform:translate(-50%,42px);font-size:11px;letter-spacing:.12em;font-weight:800;color:#19e68c;background:rgba(8,12,24,.75);padding:3px 10px;border-radius:9999px;pointer-events:none}
+  #guideTag[hidden]{display:none}
 </style>
 </head>
 <body>
 <div id="stage">
-  <div id="badge"><span class="av">C</span>Coach<span class="dot" id="dot"></span></div>
+  <svg id="routeSvg"></svg>
+  <div id="guideTag" hidden>GUIDE ME</div>
+  <div id="badge"><span class="av" id="av">C</span><span id="avname">Coach</span><span class="dot" id="dot"></span></div>
   <div id="callout"></div>
   <div id="tasks" hidden><h3>Next up</h3><ol id="tasklist"></ol></div>
+  <div id="reaction"><img alt=""><div><div class="tag">COACH</div><div class="line"></div></div></div>
   <div id="note" hidden></div>
+  <button id="sound" hidden title="Browsers mute pages until you click once">Click once for meme sounds</button>
 </div>
 <script>
   const q=new URLSearchParams(location.search);
   const live=q.get('live'); const demo=q.get('demo')==='1';
   const $=id=>document.getElementById(id);
   const CALLOUT_SHOW_S=8;
+  let lastReactionTs=null, reactionTimer=null, lastAvatar=null, pendingSound=null;
+  // Browsers block audio until the page gets one click (OBS browser sources do not). The chip
+  // shows only when a sting was actually blocked; one click unlocks sound for the rest of the session.
+  document.getElementById('sound').onclick=()=>{ const a=pendingSound; pendingSound=null; document.getElementById('sound').hidden=true; if(a) a.play().catch(()=>{}); };
   // Panel positions: a drag on this page (OBS "Interact" or a normal window) wins, then what
   // the Coach page set on the server, then ?tasks=&callout=&badge= in the link, then defaults.
   const DEFAULT_LAYOUT={tasks:'bl',callout:'top',badge:'tl'};
@@ -88,6 +127,34 @@
       if(h.label){ const l=document.createElement('span'); l.className='lbl'; l.textContent=h.label; d.appendChild(l); }
       $('stage').appendChild(d);
     }
+    // Guide me: arrows (pointers) and numbered routes
+    $('guideTag').hidden=!st.guide;
+    document.querySelectorAll('.ptr,.wp').forEach(e=>e.remove());
+    const ARROW='<svg viewBox="0 0 24 24"><path d="M12 22 L2 8 h6 V2 h8 v6 h6 Z" fill="#19e68c" stroke="#06301c" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+    for(const p of (st.guide&&st.pointers)||[]){
+      const d=document.createElement('div'); const edge=p.direction&&p.direction!=='here';
+      d.className='ptr'+(edge?' edge '+p.direction:'');
+      let x=p.x, y=p.y;
+      if(edge){ if(p.direction==='left') x=0.06; if(p.direction==='right') x=0.94; if(p.direction==='up') y=0.1; if(p.direction==='down') y=0.9; if(p.direction==='behind'){ x=0.5; y=0.14; } }
+      d.style.left=(x*100)+'%'; d.style.top=(y*100)+'%';
+      d.innerHTML=(edge?ARROW:'')+'<span class="lbl"></span>'+(edge?'':ARROW);
+      d.querySelector('.lbl').textContent=p.label||'Go';
+      $('stage').appendChild(d);
+    }
+    const rs=$('routeSvg'); rs.innerHTML='';
+    const route=(st.guide&&st.route)||[];
+    if(route.length>1){
+      const W=rs.clientWidth||1, H=rs.clientHeight||1;
+      const pl=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+      pl.setAttribute('points', route.map(w=>(w.x*W)+','+(w.y*H)).join(' ')); rs.appendChild(pl);
+    }
+    // a waypoint whose label is already on an arrow or highlight box shows only its number (no stacked duplicate labels)
+    const shown=new Set([...(st.highlights||[]), ...((st.guide&&st.pointers)||[])].map(o=>(o.label||'').trim().toLowerCase()).filter(Boolean));
+    for(const w of route){
+      const d=document.createElement('div'); d.className='wp'; d.style.left=(w.x*100)+'%'; d.style.top=(w.y*100)+'%';
+      d.innerHTML='<span class="n"></span><span class="lbl"></span>'; d.querySelector('.n').textContent=w.n; d.querySelector('.lbl').textContent=w.label||''; if(!w.label || shown.has(w.label.trim().toLowerCase())) d.querySelector('.lbl').remove();
+      $('stage').appendChild(d);
+    }
     // callout banner, shown for a few seconds after Coach says it
     const c=$('callout');
     if(st.callout && st.callout_at && now-st.callout_at<CALLOUT_SHOW_S){ c.textContent=st.callout; c.classList.add('show'); }
@@ -96,6 +163,21 @@
     const tl=$('tasklist'); tl.innerHTML='';
     for(const t of st.tasks||[]){ const li=document.createElement('li'); li.className=t.done?'done':''; li.innerHTML='<span class="bx">'+(t.done?'&#10003;':'')+'</span><span></span>'; li.lastChild.textContent=t.text; tl.appendChild(li); }
     $('tasks').hidden=!(st.tasks&&st.tasks.length);
+    // meme reaction: show once per payload (keyed on ts), play its sting once, hide after show_ms
+    // avatar: who Coach looks like (settings on the Coach page)
+    const avUrl=st.avatar_url||(st.reaction&&st.reaction.avatar_url)||'';
+    if(avUrl!==lastAvatar){ lastAvatar=avUrl; $('av').innerHTML=avUrl?'<img alt="">':'C'; if(avUrl) $('av').firstChild.src=avUrl; $('avname').textContent=st.avatar_label||'Coach'; }
+    const rx=st.reaction;
+    if(rx && rx.ts!==lastReactionTs){
+      lastReactionTs=rx.ts;
+      const el=$('reaction'); el.querySelector('img').src=rx.image; el.querySelector('.line').textContent=rx.line||'';
+      el.querySelector('.tag').innerHTML=(rx.avatar_url?'<img alt="">':'')+(rx.avatar_label||'COACH').toUpperCase();
+      if(rx.avatar_url) el.querySelector('.tag img').src=rx.avatar_url;
+      el.className=(q.get('reaction')?'pos-'+q.get('reaction'):'')+' show';
+      if(rx.sound){ try{ const a=new Audio(rx.sound); a.volume=rx.volume==null?0.8:rx.volume;
+        a.play().then(()=>{ $('sound').hidden=true; }).catch(()=>{ pendingSound=a; $('sound').hidden=false; }); }catch(e){} }
+      clearTimeout(reactionTimer); reactionTimer=setTimeout(()=>el.classList.remove('show'), rx.show_ms||2600);
+    }
     $('dot').className='dot'+(st.live?' live':'');
   }
 
@@ -109,7 +191,7 @@
 
   if(demo){
     const t0=Date.now()/1000;
-    render({live:true, now:t0, callout:'Push left, two of them are reloading.', callout_at:t0,
+    render({live:true, now:t0, callout:'Push left, two of them are reloading.', callout_at:t0, reaction:{ts:t0,image:'/reactions/images/cackle.png',sound:'/reactions/sounds/womp.mp3',line:'Gravity 1, you 0.',show_ms:6000,avatar_url:'/reactions/avatars/muse_bot.png',avatar_label:'Muse Bot'}, avatar_url:'/reactions/avatars/muse_bot.png', avatar_label:'Muse Bot', guide:true, pointers:[{x:0.78,y:0.42,label:'East gate',direction:'here'},{x:0.04,y:0.5,label:'Key',direction:'left'}], route:[{n:1,x:0.3,y:0.75,label:'Courtyard'},{n:2,x:0.5,y:0.55,label:'Fountain'},{n:3,x:0.78,y:0.42,label:'East gate'}],
       highlights:[{x:.62,y:.28,w:.14,h:.2,label:'Enemy here'},{x:.12,y:.66,w:.1,h:.1,label:'Health'}],
       tasks:[{text:'Clear the courtyard',done:true},{text:'Grab the key by the fountain',done:false},{text:'Open the east gate',done:false}]});
     $('note').hidden=false; $('note').textContent='Demo layout. Size this source to match your game capture. Drag the panels to move them.';

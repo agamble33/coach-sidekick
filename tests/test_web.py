@@ -356,7 +356,9 @@ def test_overlay_settings_layout_and_hidden(client):
     assert st["hidden"] is False and st["layout"] == {"tasks": "bl", "callout": "top", "badge": "tl"}
     assert TestClient(webapp.app).post(f"/api/overlay/{lid}/settings", json={"hidden": True}).status_code == 403
     r = c.post(f"/api/overlay/{lid}/settings", json={"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"}})
-    assert r.status_code == 200 and r.json() == {"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"}}
+    assert r.status_code == 200 and r.json() == {"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"},
+                                                 "spice": "mild", "pack": "classic", "avatar": "muse_bot", "guide": False,
+                                                 "reactions": r.json()["reactions"]}
     st = c.get(f"/api/overlay/{lid}").json()
     assert st["hidden"] is True and st["layout"]["tasks"] == "tr"
     assert c.post(f"/api/overlay/{lid}/settings", json={"layout": {"tasks": "middle"}}).status_code == 400
@@ -393,3 +395,247 @@ def test_playbook_audience_round_trip_and_prompt(client):
     pb = webapp.app.state.playbooks.load()
     assert pb.audience == "kids" and "AUDIENCE: children" in pb.as_prompt() and "report_concern" in pb.as_prompt()
     assert c.get("/api/playbook").json()["playbook"]["audience"] == "kids"
+
+
+def test_reactions_assets_settings_and_demo(client):
+    c, webapp = client
+    # static assets are mounted where engine payloads point
+    assert c.get("/reactions/images/cackle.png").status_code == 200
+    assert c.get("/reactions/images/classic/horse_judge.png").status_code == 200
+    assert c.get("/reactions/sounds/womp.mp3").status_code == 200
+    lid = c.post("/api/live/start").json()["live_id"]
+    # demo fills in a reaction card alongside the highlights and tasks
+    demo = c.post(f"/api/overlay/{lid}/demo").json()
+    assert demo["reaction"] and demo["reaction"]["trigger"] == "missed_jump"
+    assert demo["reaction"]["image"] == "/reactions/images/classic/cackle.png" and demo["reaction"]["sound"].endswith(".mp3")
+    # settings: spice and pack round-trip, bad values are 400
+    r = c.post(f"/api/overlay/{lid}/settings", json={"spice": "unhinged", "pack": "classic"})
+    assert r.status_code == 200 and r.json()["spice"] == "unhinged" and r.json()["pack"] == "classic"
+    assert c.post(f"/api/overlay/{lid}/settings", json={"spice": "nuclear"}).status_code == 400
+    assert c.post(f"/api/overlay/{lid}/settings", json={"pack": "vhs"}).status_code == 400
+    # overlay page carries the reaction card markup
+    assert 'id="reaction"' in c.get("/overlay").text
+    c.post(f"/api/live/{lid}/stop")
+
+
+def test_reactions_avatar_test_button_and_catalog(client):
+    c, webapp = client
+    cat = c.get("/api/reactions").json()
+    assert cat["avatar"] == "muse_bot" and set(cat["avatars"]) == {"muse_bot", "coach", "dog"} and "missed_jump" in cat["triggers"]
+    assert c.get("/reactions/avatars/muse_bot.png").status_code == 200
+    lid = c.post("/api/live/start").json()["live_id"]
+    # overlay state carries the avatar for the badge
+    st = c.get(f"/api/overlay/{lid}").json()
+    assert st["avatar_url"] == "/reactions/avatars/muse_bot.png" and st["avatar_label"] == "Muse Bot"
+    r = c.post(f"/api/overlay/{lid}/settings", json={"avatar": "dog"})
+    assert r.status_code == 200 and r.json()["avatar"] == "dog" and r.json()["reactions"]["avatar_label"] == "Dog"
+    assert c.get(f"/api/overlay/{lid}").json()["avatar_label"] == "Dog"
+    assert c.post(f"/api/overlay/{lid}/settings", json={"avatar": "cat"}).status_code == 400
+    # the Test button: consent-gated, fires once, then reports the cooldown calmly
+    assert TestClient(webapp.app).post(f"/api/overlay/{lid}/react", json={"trigger": "whiff"}).status_code == 403
+    r = c.post(f"/api/overlay/{lid}/react", json={"trigger": "whiff"}).json()
+    assert r["fired"] and r["reaction"]["trigger"] == "whiff" and r["reaction"]["avatar"] == "dog"
+    assert c.get(f"/api/overlay/{lid}").json()["reaction"]["trigger"] == "whiff"
+    r2 = c.post(f"/api/overlay/{lid}/react", json={"trigger": "whiff"}).json()
+    assert r2 == {"fired": False, "reason": "global cooldown"}
+    # off switch: spice off means the test button fires nothing
+    c.post(f"/api/overlay/{lid}/settings", json={"spice": "off"})
+    assert c.post(f"/api/overlay/{lid}/react", json={"trigger": "clutch"}).json()["fired"] is False
+    # settings page carries the guide
+    page = c.get("/").text
+    assert 'id="rx_on"' in page and "Meme reactions" in page and "Test reaction" in page
+    c.post(f"/api/live/{lid}/stop")
+
+
+def test_guide_me_settings_point_and_demo(client):
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    st = c.get(f"/api/overlay/{lid}").json()
+    assert st["guide"] is False and st["pointers"] == [] and st["route"] == []
+    # off by default: the test arrow is refused calmly
+    r = c.post(f"/api/overlay/{lid}/point", json={"label": "Go here"}).json()
+    assert r["ok"] is False and "guide mode is off" in r["result"]
+    # on: arrow lands in the overlay state; demo adds a route
+    r = c.post(f"/api/overlay/{lid}/settings", json={"guide": True})
+    assert r.status_code == 200 and r.json()["guide"] is True
+    r = c.post(f"/api/overlay/{lid}/point", json={"x": 0.72, "y": 0.4, "label": "Go here"}).json()
+    assert r["ok"] and r["overlay"]["pointers"][0]["label"] == "Go here"
+    assert c.get(f"/api/overlay/{lid}").json()["pointers"][0]["x"] == 0.72
+    demo = c.post(f"/api/overlay/{lid}/demo").json()
+    assert [w["label"] for w in demo["route"]] == ["Courtyard", "Fountain", "East gate"]
+    assert any(p["direction"] == "left" for p in demo["pointers"])
+    # consent-gated like the other overlay writes
+    assert TestClient(webapp.app).post(f"/api/overlay/{lid}/point", json={}).status_code == 403
+    # off again clears everything
+    c.post(f"/api/overlay/{lid}/settings", json={"guide": False})
+    st = c.get(f"/api/overlay/{lid}").json()
+    assert st["pointers"] == [] and st["route"] == []
+    page = c.get("/overlay").text
+    assert 'id="routeSvg"' in page and 'id="guideTag"' in page
+    assert 'id="gd_on"' in c.get("/").text
+    c.post(f"/api/live/{lid}/stop")
+
+
+def test_game_sdk_state_directives_and_reactions(client):
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    assert c.get(f"/api/game/{lid}/directives").status_code == 200
+    assert c.get("/api/game/nope/directives").status_code == 404
+    # consent-gated write
+    assert TestClient(webapp.app).post(f"/api/game/{lid}/state", json={"objective": "x"}).status_code == 403
+    c.post(f"/api/overlay/{lid}/settings", json={"guide": True, "spice": "mild"})
+    body = {"game": "Fake Game", "player": {"pos": [1, 0, 2], "hp": 50}, "objective": "Find the east gate key",
+            "landmarks": [{"id": "fountain", "label": "Fountain", "visible": True, "screen": [0.52, 0.55]},
+                          {"id": "east_gate", "label": "East gate", "dir": "right"}],
+            "events": [{"type": "fell", "detail": "missed the ledge"}]}
+    r = c.post(f"/api/game/{lid}/state", json=body).json()
+    assert r["ok"] and r["landmarks"] == 2 and r["reactions_fired"] == ["missed_jump"] and r["fresh"]
+    assert c.post(f"/api/game/{lid}/state", json=[1, 2]).status_code in (400, 422)
+    # the reaction fired from the event lands in the overlay for the page and the game alike
+    d = c.get(f"/api/game/{lid}/directives").json()
+    assert d["overlay"]["reaction"]["trigger"] == "missed_jump"
+    assert d["game"]["objective"] == "Find the east gate key" and set(d["game"]["landmarks"]) == {"fountain", "east_gate"}
+    # a hand-drawn arrow on a landmark carries the id so the game can draw it in the world
+    from coach.tools import run_tool
+    s = webapp._agents[f"live:{lid}"].session
+    assert run_tool(s, "point", {"x": 0, "y": 0, "landmark": "east_gate"}).startswith("pointed East gate (off screen, right)")
+    d = c.get(f"/api/game/{lid}/directives").json()
+    assert d["overlay"]["pointers"][0]["landmark"] == "east_gate"
+    assert c.get(f"/api/game/{lid}/state").json()["posts"] == 1
+    c.post(f"/api/live/{lid}/stop")
+    assert c.get(f"/api/game/{lid}/directives").status_code == 404
+
+
+def test_game_sdk_box_and_docs_present(client):
+    c, webapp = client
+    page = c.get("/").text
+    assert 'id="sdk_copy"' in page and "Game SDK" in page
+    from pathlib import Path
+    root = Path(webapp.__file__).resolve().parent.parent
+    assert (root / "docs" / "game-sdk.md").is_file()
+    assert (root / "sdk" / "unity" / "CoachClient.cs").is_file() and (root / "sdk" / "unity" / "CoachArrow.cs").is_file()
+
+
+def test_guard_caps_turns_and_frames(client, monkeypatch):
+    from coach.guard import Guard, Limits
+    c, webapp = client
+    webapp.app.state.guard = Guard(webapp.DATA / "budget-test.json", Limits(turns_per_min=2, frames_per_min=1))
+    assert c.get("/api/guard").json()["per_minute"]["turns"] == 2
+    lid = c.post("/api/live/start").json()["live_id"]
+    jpeg = b"\xff\xd8" + b"\x00" * 100
+    assert c.post(f"/api/live/{lid}/frame", files={"file": ("f.jpg", jpeg, "image/jpeg")}).status_code == 200
+    r = c.post(f"/api/live/{lid}/frame", files={"file": ("f.jpg", jpeg, "image/jpeg")})
+    assert r.status_code == 429 and "breather" in r.json()["detail"]
+    # turns: the cap fires before any model call
+    for _ in range(2):
+        c.post("/api/turn", json={"live_id": lid, "text": "hi"})
+    r = c.post("/api/turn", json={"live_id": lid, "text": "hi"})
+    assert r.status_code == 429
+    webapp.app.state.guard.disabled = True
+    assert c.post("/api/turn", json={"live_id": lid, "text": "hi"}).status_code == 503
+    webapp.app.state.guard.disabled = False
+    c.post(f"/api/live/{lid}/stop")
+
+
+def test_profile_api(client):
+    c, webapp = client
+    assert c.get("/api/profile").json() == {"games": {}}
+    r = c.put("/api/profile", json={"game": "Kid Kart", "category": "controls", "name": "invert_y", "value": "on"})
+    assert r.status_code == 200 and r.json()["game"] == "kid kart"
+    assert c.put("/api/profile", json={"game": "x", "category": "weather", "name": "a", "value": "b"}).status_code == 400
+    assert c.get("/api/profile").json()["games"]["kid kart"]["invert_y"]["value"] == "on"
+    assert c.delete("/api/profile", params={"game": "Kid Kart", "name": "invert_y"}).json()["removed"] == 1
+    assert c.get("/api/profile").json() == {"games": {}}
+
+
+def test_bad_model_config_is_a_clear_503_not_a_crash(client):
+    from coach.config import ConfigError
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    def broken():
+        raise ConfigError("META_BASE_URL must be an https URL")
+    old = webapp.app.state.client_factory
+    webapp.app.state.client_factory = broken
+    try:
+        r = c.post(f"/api/overlay/{lid}/settings", json={"guide": True})
+        assert r.status_code == 503 and "https" in r.json()["detail"]
+    finally:
+        webapp.app.state.client_factory = old
+    c.post(f"/api/live/{lid}/stop")
+
+
+def test_page_scripts_parse():
+    """A single stray quote once killed every button on the dashboard. Parse each page's script with node."""
+    import re, shutil, subprocess, tempfile
+    from pathlib import Path
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    for page in ("index.html", "overlay.html"):
+        html = (Path(__file__).resolve().parents[1] / "web" / "static" / page).read_text(encoding="utf-8")
+        js = "\n".join(re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S))
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
+            f.write(js)
+        r = subprocess.run([node, "--check", f.name], capture_output=True, text=True)
+        assert r.returncode == 0, f"{page}: {r.stderr[:400]}"
+
+
+def test_go_live_reachable_after_a_match_loads(client):
+    """The hero (with Go live) hides once a match loads; the match card must offer Go live too."""
+    c, _ = client
+    html = c.get("/").text
+    i = html.index('id="matchCard"'); j = html.index("</div>", html.index('id="sample2"'))
+    assert 'id="golive2"' in html[i:j + 200] and "$('golive2').onclick=goLive" in html
+
+
+def test_auto_callouts_wait_for_a_scene_change(client):
+    """The watch tick is the expensive call; the page must skip it when the shared screen has not changed."""
+    html = client[0].get("/").text
+    assert "sceneDiff(" in html and "state.sceneChanged" in html and "WATCH_EVERY_MS=30000" in html
+
+
+def test_one_coach_turn_at_a_time_per_session(client):
+    """Loop safety: a second turn (or a watch tick) on a session that is still answering is refused, never queued."""
+    import threading
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    gate = threading.Event()
+
+    class SlowMeta:
+        def post_json(self, path, payload):
+            gate.wait(5)
+            return {"id": "r1", "output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}]}
+    webapp.app.state.client_factory = lambda: SlowMeta()
+    webapp._agents.clear()
+    out = {}
+    def first():
+        with c.stream("POST", "/api/turn", json={"live_id": lid, "text": "hi"}) as r:
+            out["status"] = r.status_code; out["body"] = "".join(r.iter_text())
+    t = threading.Thread(target=first); t.start()
+    for _ in range(50):          # wait until the first turn is marked busy
+        if f"live:{lid}" in webapp._busy:
+            break
+        __import__("time").sleep(0.02)
+    assert f"live:{lid}" in webapp._busy
+    r2 = c.post("/api/turn", json={"live_id": lid, "text": "again"})
+    assert r2.status_code == 409 and "still answering" in r2.json()["detail"]
+    r3 = c.post("/api/turn", json={"live_id": lid, "watch": True})
+    assert r3.status_code == 409
+    gate.set(); t.join(10)
+    assert out["status"] == 200 and "event: done" in out["body"] and '"game": "live session"' in out["body"]
+    assert f"live:{lid}" not in webapp._busy
+    assert c.post("/api/turn", json={"live_id": lid, "text": "free again"}).status_code == 200
+
+
+def test_dashboard_hands_free_and_player_readable_steps(client):
+    html = client[0].get("/").text
+    assert 'id="listen"' in html and "Coach, stop talking" in html and "Coach, talk to me" in html
+    assert "function plainStep(" in html and 'id="details"' in html and 'id="gameTag"' in html
+    assert 'id="howto"' in html and "docs/vr.md" in html and "docs/pc-overlay.md" in html
+
+
+def test_coach_windows_open_on_go_live_and_by_voice(client):
+    html = client[0].get("/").text
+    assert 'id="autoopen"' in html and "function showCoachWindows(" in html and 'id="openPrompt"' in html
+    assert "Coach, show overlay" in html
+    assert "v.play().catch(()=>{});   // not awaited" in html     # a frameless share must not stall go live

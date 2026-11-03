@@ -33,21 +33,25 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from coach.gamestate import GameState
+from coach.guard import Guard, GuardError, Limits
+from coach.profile import PlayerProfile
 from pydantic import BaseModel, Field
 
 from coach.agent import TEACH_PROMPT, WATCH_PROMPT, CoachAgent
 from coach.annotations import AnnotationStore
 from coach.clips import detect_audio_events, detect_scene_events
-from coach.config import load_settings
+from coach.config import ConfigError, load_settings
 from coach.health import health_report
 from coach.incidents import STATUSES, IncidentStore
 from coach.ingest import VIDEO_SUFFIXES, IngestError, probe
 from coach.memory import MatchMemory
 from coach.meta_api import MetaAPIError, MetaClient
 from coach.moments import pick_clips
+from coach.gamebrief import GameBriefStore
 from coach.playbook import PlaybookError, PlaybookStore
 from coach.tools import LiveFeed, Session
 from coach.voice import VoiceError, to_wav_24k, transcribe_file
@@ -60,6 +64,7 @@ MAX_AUDIO = 25 * 1024 * 1024
 app = FastAPI(title="Coach: Coach")
 _lock = threading.Lock()
 _agents: dict[str, CoachAgent] = {}
+_busy: set[str] = set()                 # sessions with a Coach turn in flight: one at a time, no pile-ups
 _matches: dict[str, dict] = {}
 _live: dict[str, LiveFeed] = {}
 MAX_LIVE = 20
@@ -143,7 +148,25 @@ def _client_factory() -> MetaClient:
 app.state.client_factory = _client_factory
 app.state.transcribe = transcribe_file
 app.state.memory = MatchMemory(DATA / "memory.json")
+app.state.profile = PlayerProfile(DATA / "profile.json")
+app.state.guard = Guard(DATA / "budget.json", Limits.from_env(), disabled=os.environ.get("COACH_DISABLED", "") in ("1", "true", "yes"))
+
+
+def _subject(request: Request) -> str:
+    """Who to count against: the consent id when present, else the client address."""
+    cid = request.headers.get("x-coach-consent") or ""
+    return cid[:32] if cid else (request.client.host if request.client else "anon")
+
+
+def _guard(request: Request, kind: str) -> str:
+    sub = _subject(request)
+    try:
+        app.state.guard.check(kind, sub)
+    except GuardError as exc:
+        raise HTTPException(exc.status, exc.message)
+    return sub
 app.state.playbooks = PlaybookStore(DATA / "playbook.json")
+app.state.briefs = GameBriefStore(DATA / "game_briefs")
 app.state.annotations = AnnotationStore(DATA / "annotations" / "records.jsonl")
 app.state.incidents = IncidentStore(DATA / "incidents" / "incidents.jsonl")
 
@@ -273,14 +296,14 @@ def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
                     raise HTTPException(404, "live session not found")
             try:
                 client = app.state.client_factory()
-            except MetaAPIError as exc:
+            except (MetaAPIError, ConfigError) as exc:
                 raise HTTPException(503, str(exc))
             session = Session(work_dir=Path(meta["video"]).parent if meta else DATA / "scratch",
-                              memory=app.state.memory,
+                              memory=app.state.memory, profile=app.state.profile,
                               match=meta["name"] if meta else ("live session" if live_id else "no match"),
                               video=meta["video"] if meta else None, client=client, live=feed,
                               annotations=app.state.annotations, incidents=app.state.incidents,
-                              live_id=live_id or "")
+                              live_id=live_id or "", briefs=app.state.briefs)
             _agents[key] = CoachAgent(client, session)
         agent = _agents[key]
         agent.session.playbook = app.state.playbooks.load()      # always current
@@ -299,7 +322,8 @@ def live_start(consent: str = Depends(require_consent)):
 
 
 @app.post("/api/live/{lid}/frame")
-async def live_frame(lid: str, file: UploadFile = File(...)):
+async def live_frame(lid: str, request: Request, file: UploadFile = File(...)):
+    _guard(request, "frames")
     feed = _live.get(lid)
     if feed is None:
         raise HTTPException(404, "live session not found")
@@ -338,14 +362,24 @@ def _overlay_for(lid: str):
 def overlay_state(lid: str):
     ov = _overlay_for(lid)
     if ov is None:
-        return {"highlights": [], "tasks": [], "callout": "", "callout_at": 0, "hidden": False,
-                "layout": {"tasks": "bl", "callout": "top", "badge": "tl"}, "updated": 0, "now": time.time()}
-    return ov.snapshot()
+        from coach.reactions.engine import ReactionEngine
+        d = ReactionEngine(validate_assets=False).state()   # defaults before Coach's agent exists for this session
+        return {"highlights": [], "tasks": [], "callout": "", "callout_at": 0, "hidden": False, "reaction": None, "guide": False, "pointers": [], "route": [],
+                "layout": {"tasks": "bl", "callout": "top", "badge": "tl"}, "updated": 0, "now": time.time(),
+                "avatar_url": d["avatar_url"], "avatar_label": d["avatar_label"]}
+    snap = ov.snapshot()
+    rx = _agents[f"live:{lid}"].session.reactions
+    snap["avatar_url"], snap["avatar_label"] = rx.avatar_url(), rx.state()["avatar_label"]
+    return snap
 
 
 class OverlaySettingsIn(BaseModel):
     hidden: bool | None = None
     layout: dict | None = None
+    spice: str | None = None     # reactions: off | mild | unhinged
+    pack: str | None = None      # reactions: 3d | classic
+    avatar: str | None = None    # reactions: muse_bot | coach | dog
+    guide: bool | None = None    # Guide me: let Coach draw arrows and routes
 
 
 @app.post("/api/overlay/{lid}/settings")
@@ -356,12 +390,151 @@ def overlay_settings(lid: str, body: OverlaySettingsIn, consent: str = Depends(r
     ov = _agent_for(None, lid).session.overlay
     if body.hidden is not None:
         ov.hidden = bool(body.hidden); ov.touch()
+    if body.guide is not None:
+        ov.guide = bool(body.guide)
+        if not ov.guide:
+            ov.clear_guidance()
+        ov.touch()
     if body.layout is not None:
         try:
             ov.set_layout(body.layout)
         except ValueError as exc:
             raise HTTPException(400, str(exc))
-    return {"hidden": ov.hidden, "layout": dict(ov.layout)}
+    rx = _agent_for(None, lid).session.reactions
+    try:
+        if body.spice is not None:
+            rx.set_spice(body.spice)
+        if body.pack is not None:
+            rx.set_pack(body.pack)
+        if body.avatar is not None:
+            rx.set_avatar(body.avatar)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    ov.touch()
+    return {"hidden": ov.hidden, "layout": dict(ov.layout), "spice": rx.spice, "pack": rx.pack, "avatar": rx.avatar,
+            "guide": ov.guide, "reactions": rx.state()}
+
+
+class ReactTestIn(BaseModel):
+    trigger: str = "missed_jump"
+
+
+@app.post("/api/overlay/{lid}/react")
+def overlay_react(lid: str, body: ReactTestIn, consent: str = Depends(require_consent)):
+    """Fire one reaction by hand (the Test button in settings). Same engine and cooldowns as Coach's react tool."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    s = _agent_for(None, lid).session
+    payload = s.reactions.fire(body.trigger, "test from settings")
+    if payload is None:
+        _, why = s.reactions.can_fire(body.trigger)
+        return {"fired": False, "reason": why}
+    s.overlay.react(payload)
+    return {"fired": True, "reaction": payload}
+
+
+class PointTestIn(BaseModel):
+    x: float = 0.72
+    y: float = 0.4
+    label: str = "Go here"
+    direction: str = "here"
+
+
+@app.post("/api/overlay/{lid}/point")
+def overlay_point(lid: str, body: PointTestIn, consent: str = Depends(require_consent)):
+    """Draw one arrow by hand (the Test arrow button). Same path as Coach's point tool, same Guide me gate."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    from coach.tools import run_tool
+    s = _agent_for(None, lid).session
+    out = run_tool(s, "point", {"x": body.x, "y": body.y, "label": body.label, "direction": body.direction})
+    return {"ok": out.startswith("pointed"), "result": out, "overlay": s.overlay.snapshot()}
+
+
+# ---- Gate 12: Game SDK. A game that integrates Coach posts its state here and reads directives back. ----
+
+@app.post("/api/game/{lid}/state")
+def game_state_in(lid: str, body: dict, consent: str = Depends(require_consent)):
+    """The game reports player, objective, landmarks and events (see docs/game-sdk.md).
+    Events that match a reaction trigger fire the meme reaction directly, no model call."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    s = _agent_for(None, lid).session
+    try:
+        triggers = s.game_state.update(body)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    fired = []
+    for t in triggers:
+        payload = s.reactions.fire(t, "game event")
+        if payload:
+            s.overlay.react(payload)
+            fired.append(t)
+    return {"ok": True, "posts": s.game_state.posts, "landmarks": len(s.game_state.landmarks), "reactions_fired": fired,
+            "fresh": s.game_state.fresh()}
+
+
+@app.get("/api/game/{lid}/directives")
+def game_directives(lid: str):
+    """Everything the game should draw or say: the overlay snapshot (callout, tasks, pointers and route with
+    landmark ids, reaction) plus what Coach currently knows about the game. Poll every 0.5 to 1 s."""
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    agent = _agents.get(f"live:{lid}")
+    if agent is None:
+        return {"overlay": overlay_state(lid), "game": GameState().snapshot(), "speak": ""}
+    ov = agent.session.overlay.snapshot()
+    ov["avatar_url"], ov["avatar_label"] = agent.session.reactions.avatar_url(), agent.session.reactions.state()["avatar_label"]
+    return {"overlay": ov, "game": agent.session.game_state.snapshot(), "speak": ov["callout"], "speak_at": ov["callout_at"]}
+
+
+@app.get("/api/game/{lid}/state")
+def game_state_out(lid: str):
+    if lid not in _live:
+        raise HTTPException(404, "live session not found")
+    agent = _agents.get(f"live:{lid}")
+    return agent.session.game_state.snapshot() if agent else GameState().snapshot()
+
+
+class PreferenceIn(BaseModel):
+    game: str = "any game"
+    category: str
+    name: str
+    value: str
+
+
+@app.get("/api/profile")
+def profile_get():
+    """The player's saved preferences, all games."""
+    return app.state.profile.snapshot()
+
+
+@app.put("/api/profile")
+def profile_put(body: PreferenceIn):
+    try:
+        return app.state.profile.set(body.game, body.category, body.name, body.value)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.delete("/api/profile")
+def profile_delete(game: str, name: str = ""):
+    return {"removed": app.state.profile.forget(game, name)}
+
+
+@app.get("/api/guard")
+def guard_status():
+    """Operator view of the abuse caps: tokens used today, refusals, limits. No per-person data."""
+    st = app.state.guard.status()
+    st["offtopic_redirects"] = sum(a.offtopic for a in _agents.values())
+    return st
+
+
+@app.get("/api/reactions")
+def reactions_catalog():
+    """What the reaction feature offers (spice levels, packs, avatars, triggers) for the settings panel."""
+    from coach.reactions.engine import ReactionEngine
+    return ReactionEngine(validate_assets=False).state()
 
 
 @app.post("/api/overlay/{lid}/demo")
@@ -376,11 +549,20 @@ def overlay_demo(lid: str, consent: str = Depends(require_consent)):
     ov.set_tasks(["Clear the courtyard", "Grab the key by the fountain", "Open the east gate"])
     ov.task_done(1)
     ov.say("Push left, two of them are reloading.")
+    if ov.guide:
+        ov.add_pointer(0.78, 0.42, "East gate", "here", 20)
+        ov.add_pointer(0.04, 0.5, "Key", "left", 20)
+        ov.set_route([{"x": 0.3, "y": 0.75, "label": "Courtyard"}, {"x": 0.5, "y": 0.55, "label": "Fountain"},
+                      {"x": 0.78, "y": 0.42, "label": "East gate"}], 20)
+    demo_rx = agent.session.reactions.fire("missed_jump", "demo")
+    if demo_rx:
+        ov.react(demo_rx)
     return ov.snapshot()
 
 
 @app.post("/api/turn")
-def turn(body: TurnIn):
+def turn(body: TurnIn, request: Request):
+    subject = _guard(request, "turns")
     text = (body.text or "").strip()
     if body.watch:
         if not body.live_id:
@@ -392,20 +574,30 @@ def turn(body: TurnIn):
     agent.session.teach = body.teach
     if body.teach and agent.session.playbook is None:
         raise HTTPException(400, "teach mode needs a playbook; save one first")
+    key = f"live:{body.live_id}" if body.live_id else (body.match_id or "none")
+    with _lock:
+        if key in _busy:
+            if body.watch:      # a tick that lands on a busy session is simply dropped
+                raise HTTPException(409, "Coach is still on the last one")
+            raise HTTPException(409, "Coach is still answering; wait for that reply")
+        _busy.add(key)
     q: queue.Queue = queue.Queue()
     agent.on_event = lambda kind, data: q.put((kind, data))
 
     def work():
         try:
             r = agent.turn(text)
+            app.state.guard.record_usage(subject, r.input_tokens + r.output_tokens)
             q.put(("done", {"text": r.text, "rounds": r.rounds, "input_tokens": r.input_tokens,
                             "output_tokens": r.output_tokens, "spoken": agent.session.spoken[-3:],
-                            "record_id": r.record_id}))
+                            "record_id": r.record_id, "offtopic": r.offtopic, "game": agent.session.game}))
         except (MetaAPIError, ValueError) as exc:
             q.put(("error", {"message": str(exc)}))
         except Exception as exc:                       # never leave the stream empty
             q.put(("error", {"message": f"unexpected {type(exc).__name__}: {exc}"}))
         finally:
+            with _lock:
+                _busy.discard(key)
             q.put(None)
 
     threading.Thread(target=work, daemon=True).start()
@@ -423,7 +615,8 @@ def turn(body: TurnIn):
 
 
 @app.post("/api/transcribe")
-async def transcribe(file: UploadFile = File(...), consent: str = Depends(require_consent)):
+async def transcribe(request: Request, file: UploadFile = File(...), consent: str = Depends(require_consent)):
+    _guard(request, "transcribes")
     data = await file.read()
     if len(data) > MAX_AUDIO:
         raise HTTPException(413, "audio is larger than 25 MB")
@@ -583,3 +776,6 @@ def index():
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+# reaction cards + sound stings (engine payloads point at /reactions/images/... and /reactions/sounds/...)
+from coach.reactions.engine import ASSETS as REACTION_ASSETS
+app.mount("/reactions", StaticFiles(directory=REACTION_ASSETS), name="reactions")

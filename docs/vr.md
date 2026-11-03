@@ -187,6 +187,12 @@ titles block casting or show a blank frame. Casting also costs headset performan
 
 Coach's voice plays on the PC. To get it into your ears while you are in a standalone app:
 
+0. **Bluetooth earbuds paired to the PC (recommended, two minutes).** Pair your earbuds to the
+   **PC**, not the headset, and make them the PC's output device. Coach's voice and the meme
+   sounds now play in your ears while the Quest runs the game and its own audio comes from the
+   headset's speakers. Wear one earbud and leave the other ear open: the game and your
+   teammates in party chat in one ear, Coach in the other. Nothing to configure in Coach. This is
+   how the demo recording was made.
 1. **A call app on the headset.** Start a voice call between the PC and the headset (for example
    Discord or Messenger on the Quest and on the PC) and route the PC's Coach audio into the call's
    microphone input (a virtual audio cable such as VB-Cable, or Windows "Listen to this device").
@@ -198,8 +204,8 @@ Coach's voice plays on the PC. To get it into your ears while you are in a stand
    while you are in Horizon Home or another 2D panel context: once you enter an immersive app, the
    browser panel is hidden and its audio stops, so it does not help during the game itself. It is
    useful between rounds or in a lobby.
-3. **Headphones on the PC side**: if you play with one ear free, a PC speaker near you is the
-   simplest workaround of all.
+3. **A PC speaker near you** if you have no earbuds; the headset's open-ear speakers let room
+   audio through.
 
 ### Talk to Coach from a standalone game
 
