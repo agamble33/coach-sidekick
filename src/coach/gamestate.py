@@ -23,7 +23,9 @@ EVENT_ALIASES = {
     "died": "near_death", "respawn": "near_death", "low_hp": "near_death",
     "idle": "slow_reaction", "afk": "slow_reaction",
     "friendly_fire": "dumb_play", "wasted_ult": "dumb_play",
-    "kill_streak": "clutch", "objective_done": "clutch", "boss_down": "clutch",
+    "kill_streak": "clutch", "objective_done": "clutch", "boss_down": "clutch", "headshot": "clutch", "ace": "clutch", "comeback": "clutch",
+    "missed_shot": "whiff", "miss": "whiff", "teamkill": "dumb_play", "flirt": "rizz_detected", "ignored_hint": "ignored_callout",
+    "revive_needed": "near_death", "downed": "near_death",
 }
 
 

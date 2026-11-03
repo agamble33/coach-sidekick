@@ -212,3 +212,13 @@ def test_classic_is_default_and_rizz_falls_back_to_3d(eng):
     eng._last_any = float("-inf")  # skip the global cooldown
     p = eng.fire("rizz_detected")
     assert p and p["image"] == "/reactions/images/rizz.png"
+
+
+def test_every_trigger_has_its_own_sound_variety_and_five_lines():
+    raw = json.loads((ROOT / "reactions.json").read_text())
+    for r in raw["reactions"]:
+        assert len(r["lines"]) >= 5, r["trigger"]
+    sounds = [r["sound"] for r in raw["reactions"] if r["min_spice"] == "mild"]
+    assert len(set(sounds)) == len(sounds), "two mild triggers share a sting"
+    for r in raw["reactions"]:
+        assert (ROOT / "assets" / r["sound"]).exists(), r["sound"]

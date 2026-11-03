@@ -240,6 +240,26 @@
   #rxBar{border-left:3px solid var(--pink)}
   #sdkBox{border-left:3px solid var(--blue)}
   .timeline .mark{background:var(--blue)}
+  /* Quest-style dock: one translucent pill bar, icon + label per section */
+  .dock{position:sticky;top:60px;z-index:4;display:flex;justify-content:center;gap:4px;padding:8px 12px;margin:0 auto;width:max-content;max-width:calc(100% - 32px);border-radius:9999px;background:rgba(18,23,34,.82);border:1px solid var(--border);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 10px 30px rgba(0,0,0,.35);transform:translateY(12px)}
+  :root[data-theme="light"] .dock{background:rgba(255,255,255,.85)}
+  .dock a{display:flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:9999px;color:var(--text-2);font:600 13px var(--hud);letter-spacing:.04em;text-transform:uppercase;text-decoration:none;transition:background .15s,color .15s}
+  .dock a svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .dock a:hover,.dock a.on{background:var(--blue-tint);color:var(--blue)}
+  @media (max-width:700px){.dock{top:60px;gap:0;padding:6px 8px;width:calc(100% - 32px)} .dock a{padding:0 8px;height:34px;flex:1;justify-content:center} .dock a span{display:none}}
+  .wrap{padding-top:34px}
+  :root:not([data-theme="light"]) .card,:root:not([data-theme="light"]) .hero{background:rgba(18,23,34,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+  /* chat: Coach bubbles carry the Coach face; tails on both sides; meme thumbnails inline */
+  .msg.from-coach{position:relative;margin-left:38px;border-bottom-left-radius:6px}
+  .msg.from-coach::before{content:"";position:absolute;left:-38px;bottom:0;width:30px;height:30px;border-radius:50%;background:url(/static/favicon.png) center/cover,var(--blue);box-shadow:0 0 0 2px var(--border)}
+  .msg.from-coach::after{content:"";position:absolute;left:-6px;bottom:6px;border:6px solid transparent;border-right-color:var(--surface);border-left:0}
+  .msg.me::after{content:"";position:absolute;right:-6px;bottom:6px;border:6px solid transparent;border-left-color:var(--bubble-me);border-right:0}
+  .msg.me{position:relative}
+  .msg.tip{align-self:stretch;background:transparent;border:1px dashed var(--border);border-radius:12px;font-size:13px;color:var(--text-2)}
+  .step.plain{margin-left:38px}
+  .meme{align-self:flex-start;margin-left:38px;display:flex;align-items:center;gap:10px;padding:6px 10px 6px 6px;border-radius:14px;background:linear-gradient(135deg,rgba(255,143,177,.18),var(--surface) 70%);border:1px solid rgba(255,143,177,.45);font-weight:600;font-size:14px}
+  .meme img{width:54px;height:54px;border-radius:10px;object-fit:cover}
+  .meme small{display:block;font-weight:500;color:var(--text-2);font-size:12px}
   :root:not([data-theme="light"]) select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font:500 13px var(--font)}
   :root:not([data-theme="light"]) select:focus{outline:0;border-color:var(--blue)}
 </style>
@@ -254,6 +274,14 @@
   <a class="btn ghost" href="https://github.com/agamble33/coach-sidekick" target="_blank" rel="noopener">Source</a>
 </header>
 
+<nav class="dock" aria-label="Sections">
+  <a href="#hero" data-go="hero,liveCard,matchCard"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>Play</span></a>
+  <a href="#abilitiesCard" data-go="abilitiesCard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Abilities</span></a>
+  <a href="#pbCard" data-go="pbCard"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg><span>Studio</span></a>
+  <a href="#dataCard" data-go="dataCard"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span>Data</span></a>
+  <a href="#memoryCard" data-go="memoryCard"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Memory</span></a>
+  <a href="#" id="dockSettings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></a>
+</nav>
 <main class="wrap">
   <section class="stack">
     <div id="hero" class="hero">
@@ -328,7 +356,7 @@
       <canvas id="grab" hidden></canvas>
     </div>
 
-    <div class="card">
+    <div class="card" id="abilitiesCard">
       <div class="row" style="justify-content:space-between;margin-bottom:4px"><h2><span class="hudtag">ABILITIES</span>What Coach can do</h2><span class="chip"><span class="dot"></span>13 live · 1 on the way</span></div>
       <p class="sub">Every live feature runs on Meta models through the Model API.</p>
       <div class="feats">
@@ -438,7 +466,7 @@
       <p id="exportMsg" class="sub" style="margin:10px 0 0"></p>
     </div>
 
-    <div class="card">
+    <div class="card" id="memoryCard">
       <h2>Match memory</h2>
       <p class="sub">Notes Coach saved with <code>remember</code>. They persist across matches.</p>
       <div id="notes" class="notes"></div>
@@ -539,6 +567,12 @@
       case 'report_concern': return 'Coach flagged something for a human to check';
       default: return 'Coach is working ('+name+')';
     } }
+  async function showMemeInChat(output){
+    // "reacted clutch: Big brain." -> pull the card the overlay is showing and drop it in the chat
+    const m=/^reacted (\w+): (.*)$/.exec(output); if(!m || !state.live) return;
+    try{ const st=await (await fetch('/api/overlay/'+state.live)).json(); const r=st.reaction; if(!r || !r.image) return;
+      const d=add('meme',`<img alt=""><div><span></span><small></small></div>`); d.querySelector('img').src=r.image; d.querySelector('span').textContent=r.line||m[2]; d.querySelector('small').textContent='Meme reaction: '+m[1].replace(/_/g,' '); }catch(e){}
+  }
   function gameSync(){ const el=$('gameTag'); if(!el) return; el.hidden=!state.game; el.textContent=state.game?('Playing: '+state.game):''; }
   function speak(text){
     if(state.muted || !$('voice').checked || !('speechSynthesis' in window) || !text) return;
@@ -617,6 +651,7 @@
             step=add('step'+(SHOW_DETAILS?'':' plain'),`<div class="t"><span class="spin"></span><span class="say">${esc(plainStep(data.name,data.arguments))}</span></div><div class="a">${esc(data.arguments||'')}</div>`); }
           else if(ev==='tool_result' && step){ step.querySelector('.spin').outerHTML='<span class="ok">✓</span>'; const o=document.createElement('div'); o.className='o'; o.textContent=data.output; step.appendChild(o);
             if(data.name==='set_game'){ const m=/game set to (.*)$/.exec(data.output); if(m){ state.game=m[1]; gameSync(); } }
+            if(data.name==='react' && /^reacted /.test(data.output||'')){ showMemeInChat(data.output); }
             if(data.name==='cut_clip') refreshMatch(); if(data.name==='remember') loadMemory();
             if(data.name==='callout'){ const m=/\): (.*)$/s.exec(data.output); if(m){ speak(m[1]); const b=add('msg from-coach', esc(m[1])); const rt=rater(data.record_id); if(rt) b.appendChild(rt); loadStats(); } } }
           else if(ev==='done'){ const quiet=watch && /^quiet\.?$/i.test((data.text||'').trim()); if(data.game && !/^(live session|no match|current match)$/.test(data.game)){ state.game=data.game; gameSync(); }
@@ -882,6 +917,8 @@
   const root=document.documentElement;
   function applyTheme(t){ if(t==='light') root.setAttribute('data-theme','light'); else root.removeAttribute('data-theme'); $('theme').textContent=t==='light'?'Dark':'Light'; try{localStorage.setItem('coach-theme',t);}catch(e){} }
   try{ applyTheme(localStorage.getItem('coach-theme')||'dark'); }catch(e){ applyTheme('dark'); }
+  document.querySelectorAll('.dock a[data-go]').forEach(a=>{ a.onclick=e=>{ e.preventDefault(); const id=a.dataset.go.split(',').find(i=>{ const el=$(i); return el && !el.hidden; }); const el=$(id||'hero'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); document.querySelectorAll('.dock a').forEach(x=>x.classList.toggle('on',x===a)); }; });
+  $('dockSettings').onclick=e=>{ e.preventDefault(); const t=state.live?$('rxBar'):$('howto'); if(state.live){ $('rxBar').scrollIntoView({behavior:'smooth',block:'center'}); $('rxBar').animate([{boxShadow:'0 0 0 0 rgba(25,230,140,.0)'},{boxShadow:'0 0 0 4px rgba(25,230,140,.6)'},{boxShadow:'0 0 0 0 rgba(25,230,140,0)'}],{duration:1200}); } else add('msg tip','Settings live in the <b>LOADOUT</b> strip once you go live: meme reactions, spice, style, who Coach is, Guide me, and the overlay layout.'); };
   $('theme').onclick=()=>applyTheme(root.getAttribute('data-theme')==='light'?'dark':'light');
 
   // ---------- studio playbook ----------

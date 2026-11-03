@@ -37,7 +37,7 @@ def test_update_maps_events_and_keeps_prompt_factual():
     assert "GAME STATE" in p and "door (Door) on screen at x=0.70 y=0.40" in p and "key (key) off screen, left" in p
     assert "recent events: fell, clutch, unknown_thing" in p
     for k, v in EVENT_ALIASES.items():
-        assert v in {"missed_jump", "near_death", "slow_reaction", "dumb_play", "clutch"}
+        assert v in {"missed_jump", "near_death", "slow_reaction", "dumb_play", "clutch", "whiff", "rizz_detected", "ignored_callout"}
 
 
 def test_stale_state_is_not_in_prompt():
@@ -120,3 +120,9 @@ def test_set_game_tool_names_the_game_unless_the_sdk_already_did(tmp_path):
     assert "keeping that" in run_tool(s, "set_game", '{"name": "Something Else"}')
     assert s.game == "Rocket Rally"
     assert "error" in run_tool(s, "set_game", '{"name": ""}')
+
+
+def test_common_game_events_map_to_reactions():
+    from coach.gamestate import EVENT_ALIASES
+    assert EVENT_ALIASES["missed_shot"] == "whiff" and EVENT_ALIASES["headshot"] == "clutch"
+    assert EVENT_ALIASES["teamkill"] == "dumb_play" and EVENT_ALIASES["flirt"] == "rizz_detected"
