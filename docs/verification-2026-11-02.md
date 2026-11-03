@@ -75,3 +75,10 @@ Chromium, reactions fired through the API and from a game event. **45/45 checks 
 
 Not covered: the model choosing to call `react` on its own (needs the Meta API; run
 `scripts/regrade_live.py` on the PC).
+
+## Nov 3: real-model audit and speed
+
+- `scripts/muse_audit.py` (run on the PC with the real key): 18/18 Muse-backed features passed, including vision on a frame, highlights, memory, scope rule, live strategy, meme reactions (fail and rizz), on-screen instruction injection ignored, adult-contact report, player profile save and recall, Guide me arrow and route anchored to a game landmark, teach and watch ticks, and Muse Voice Transcribe (1.6 s).
+- Finding: turns took 13 to 38 s. `scripts/latency_probe.py` showed the model itself answers a short prompt in about 3 s; requests that continue a server thread with `previous_response_id` took 8 to 12 s each. Switched the agent to local threading (we resend the last six exchanges and this turn's tool calls ourselves). `scripts/speed_check.py`: 4 tool-using turns went from 62.6 s (server threading) to 41.1 s (local), with model rounds at 3 to 4 s instead of 8 to 12 s. `COACH_THREADING=server` restores the old mode.
+- UI audit (`ui_audit.py`, Playwright against the stand-in API): 42/42. Found and fixed: the page script was broken by one unescaped quote (every button dead, also on main); Go live was unreachable once a match was loaded; waypoint labels stacked on top of arrow labels.
+- Unit tests: 236 pass.

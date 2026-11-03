@@ -365,6 +365,7 @@
         <div class="row">
           <label class="btn ghost" for="file">Change video</label>
           <button id="sample2" class="btn ghost">Sample</button>
+          <button id="golive2" class="btn secondary" title="Share your screen and let Coach watch live">Go live</button>
         </div>
       </div>
       <div class="player"><video id="video" controls playsinline></video></div>
@@ -452,7 +453,7 @@
     </div>
     <div class="foot">
       <label class="toggle"><input id="voice" type="checkbox" checked> Coach speaks replies</label>
-      <span id="usage"></span>
+      <span id="usage" style="margin-left:10px"></span>
       <span style="margin-left:auto;font-size:12px"><a href="/terms" target="_blank" rel="noopener">Pilot terms</a> &middot; <a href="#" id="resetConsent" title="Coach will ask you to agree again before it sees or hears anything">Reset consent</a></span>
     </div>
   </aside>
@@ -687,7 +688,7 @@
     $('liveCard').hidden=true; if(state.match) $('matchCard').hidden=false; else $('hero').hidden=false; tipsMode('match');
     setStatus('Ready when you are', false); add('msg from-coach','Stopped watching. Load a match or go live again whenever.'); cornerSync();
   }
-  $('golive').onclick=goLive; $('stoplive').onclick=stopLive; $('cornerbtn').onclick=openCorner;
+  $('golive').onclick=goLive; $('golive2').onclick=goLive; $('stoplive').onclick=stopLive; $('cornerbtn').onclick=openCorner;
   // ---- overlay layout and the Coach key ----
   // The layout is kept per browser and pushed to the live session, so the overlay page, the
   // PC app and an OBS source all place the panels the same way. H toggles the overlay.

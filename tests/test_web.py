@@ -578,3 +578,11 @@ def test_page_scripts_parse():
             f.write(js)
         r = subprocess.run([node, "--check", f.name], capture_output=True, text=True)
         assert r.returncode == 0, f"{page}: {r.stderr[:400]}"
+
+
+def test_go_live_reachable_after_a_match_loads(client):
+    """The hero (with Go live) hides once a match loads; the match card must offer Go live too."""
+    c, _ = client
+    html = c.get("/").text
+    i = html.index('id="matchCard"'); j = html.index("</div>", html.index('id="sample2"'))
+    assert 'id="golive2"' in html[i:j + 200] and "$('golive2').onclick=goLive" in html

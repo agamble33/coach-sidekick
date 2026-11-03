@@ -147,9 +147,11 @@
       const pl=document.createElementNS('http://www.w3.org/2000/svg','polyline');
       pl.setAttribute('points', route.map(w=>(w.x*W)+','+(w.y*H)).join(' ')); rs.appendChild(pl);
     }
+    // a waypoint whose label is already on an arrow or highlight box shows only its number (no stacked duplicate labels)
+    const shown=new Set([...(st.highlights||[]), ...((st.guide&&st.pointers)||[])].map(o=>(o.label||'').trim().toLowerCase()).filter(Boolean));
     for(const w of route){
       const d=document.createElement('div'); d.className='wp'; d.style.left=(w.x*100)+'%'; d.style.top=(w.y*100)+'%';
-      d.innerHTML='<span class="n"></span><span class="lbl"></span>'; d.querySelector('.n').textContent=w.n; d.querySelector('.lbl').textContent=w.label||''; if(!w.label) d.querySelector('.lbl').remove();
+      d.innerHTML='<span class="n"></span><span class="lbl"></span>'; d.querySelector('.n').textContent=w.n; d.querySelector('.lbl').textContent=w.label||''; if(!w.label || shown.has(w.label.trim().toLowerCase())) d.querySelector('.lbl').remove();
       $('stage').appendChild(d);
     }
     // callout banner, shown for a few seconds after Coach says it

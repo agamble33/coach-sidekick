@@ -1,13 +1,22 @@
 """Gate 4c: the Coach agent loop on the Responses API.
 
 One player turn = one or more model requests. The model may return
-function_call items; we run them, send function_call_output items back with
-previous_response_id, and repeat until it answers in text or we hit the cap.
+function_call items; we run them, send function_call_output items back, and
+repeat until it answers in text or we hit the cap.
+
+Threading: by default ("local") we send the conversation ourselves on every
+request: the last few player/Coach exchanges, this turn's message, and this
+turn's function calls with their outputs. Measured on the Meta Model API
+(Nov 3, 2026), a request that continues a server thread with
+previous_response_id took 7 to 10 s while the same payload sent fresh took 3
+to 5 s, so local threading roughly halves a tool-using turn. Set
+COACH_THREADING=server to go back to previous_response_id.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 
 from .coach_llm import COACH_SYSTEM, DEFAULT_MODEL, OFF_TOPIC_MARK
@@ -15,6 +24,7 @@ from .meta_api import MetaAPIError, MetaClient
 from .tools import Session, run_tool, tool_specs
 
 MAX_ROUNDS = 8
+HISTORY_ITEMS = 12          # local threading: last 6 player/Coach exchanges carried into each turn
 # what a watch/teach tick can use: the overlay tools are in so Coach can point and set tasks on its own
 LIVE_TICK_TOOLS = ["look_now", "callout", "highlight", "react", "set_tasks", "task_done", "remember", "recall", "my_preferences", "report_concern"]
 GUIDE_TOOLS = ["point", "route"]   # offered only while the player has Guide me on
@@ -105,8 +115,12 @@ def _split_output(resp: dict) -> tuple[list[dict], str]:
 
 class CoachAgent:
     def __init__(self, client: MetaClient, session: Session, model: str = DEFAULT_MODEL,
-                 effort: str = "low", max_rounds: int = MAX_ROUNDS, on_event=None):
+                 effort: str = "low", max_rounds: int = MAX_ROUNDS, on_event=None, threading: str | None = None):
         self.client, self.session, self.model, self.effort = client, session, model, effort
+        self.threading = (threading or os.environ.get("COACH_THREADING", "local")).strip().lower()
+        if self.threading not in ("local", "server"):
+            raise ValueError("threading must be local or server")
+        self.history: list[dict] = []    # local threading: recent player and Coach messages
         self.max_rounds = max_rounds
         self.on_event = on_event or (lambda kind, data: None)   # ("tool_call"|"tool_result"|"text", dict)
         self.last_response_id: str | None = None
@@ -145,8 +159,10 @@ class CoachAgent:
             tool_names = [n for n in self.tools_names() if n not in GUIDE_TOOLS]
         tools = None if tool_names is None else tool_specs(tool_names)
         result = TurnResult(text="")
-        pending: list = [{"role": "user", "content": [{"type": "input_text", "text": player_text}]}]
-        previous = self.last_response_id
+        local = self.threading == "local"
+        user_item = {"role": "user", "content": [{"type": "input_text", "text": player_text}]}
+        pending: list = (self.history + [user_item]) if local else [user_item]
+        previous = None if local else self.last_response_id
         for _ in range(self.max_rounds):
             try:
                 resp = self._request(pending, previous, tools)
@@ -160,12 +176,18 @@ class CoachAgent:
             usage = resp.get("usage", {})
             result.input_tokens += int(usage.get("input_tokens", 0))
             result.output_tokens += int(usage.get("output_tokens", 0))
-            previous = result.response_id = resp.get("id") or previous
+            result.response_id = resp.get("id") or result.response_id
+            if not local:
+                previous = result.response_id or previous
             calls, text = _split_output(resp)
             if not calls:
                 result.text = text
                 break
-            pending = []
+            if local:   # echo the calls back so the outputs below have something to answer
+                pending = pending + [{"type": "function_call", "call_id": str(c.get("call_id", ""))[:64],
+                                      "name": c.get("name", ""), "arguments": c.get("arguments", "{}")} for c in calls]
+            else:
+                pending = []
             for call in calls:
                 self.on_event("tool_call", {"name": call.get("name"), "arguments": call.get("arguments")})
                 self.session.last_record_id = ""
@@ -183,6 +205,8 @@ class CoachAgent:
             self.offtopic += 1
             result.offtopic = True
             result.text = result.text.lstrip()[len(OFF_TOPIC_MARK):].lstrip(" .:,-") or "I only do game stuff. What's happening on screen?"
+        if local and not is_tick and result.text:   # ticks are not conversation; keep them out of history
+            self.history = (self.history + [user_item, {"role": "assistant", "content": [{"type": "output_text", "text": result.text}]}])[-HISTORY_ITEMS:]
         rid = "" if (is_tick or result.text.strip().lower() == "quiet") else self.session.record("reply", result.text, player_text)
         result.record_id = rid
         self.on_event("text", {"text": result.text, "record_id": rid})
@@ -190,3 +214,4 @@ class CoachAgent:
 
     def reset(self) -> None:
         self.last_response_id = None
+        self.history = []

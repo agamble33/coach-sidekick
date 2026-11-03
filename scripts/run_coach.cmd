@@ -3,6 +3,7 @@ setlocal EnableExtensions
 cd /d "%~dp0.."
 set "PATH=%LOCALAPPDATA%\Microsoft\WinGet\Links;%PATH%"
 title Coach by Coach
+if exist .env for /f "usebackq eol=# tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
 echo === Coach (Coach) ===
 echo Installing web dependencies (first run only)...
 python -m pip install --quiet -e ".[web]"
