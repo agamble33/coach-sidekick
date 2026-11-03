@@ -22,14 +22,15 @@
    "description": "Player whiffs a jump, ledge, or platform and falls.",
    "min_spice": "mild",
    "image": "images/cackle.png",
-   "sound": "sounds/womp.mp3",
+   "sound": "sounds/faaa.mp3",
    "lines": [
     "That jump had other plans.",
     "Gravity 1, you 0.",
     "We don't talk about that one.",
     "Ledge said no.",
     "Add that to the blooper reel."
-   ]
+   ],
+   "show_ms": 3200
   },
   {
    "trigger": "dumb_play",
@@ -64,7 +65,7 @@
    "description": "Player starts flirting or chatting someone up in voice or text mid-game.",
    "min_spice": "mild",
    "image": "images/rizz.png",
-   "sound": "sounds/airhorn.mp3",
+   "sound": "sounds/rizz.mp3",
    "lines": [
     "Rizz detected. Objective abandoned.",
     "Smooth. The enemy team agrees.",
@@ -92,7 +93,7 @@
    "description": "Player survives on a sliver of health or barely escapes.",
    "min_spice": "mild",
    "image": "images/scream.png",
-   "sound": "sounds/gasp.mp3",
+   "sound": "sounds/vineboom.mp3",
    "lines": [
     "I aged ten years.",
     "One HP. One.",
@@ -158,5 +159,11 @@
    "image": "avatars/dog.png"
   }
  },
- "default_avatar": "muse_bot"
+ "default_avatar": "muse_bot",
+ "credits": {
+  "vineboom.mp3": "Pixabay, Bithuh, Pixabay Content License",
+  "bruh.mp3": "Pixabay, freesound_community, Pixabay Content License",
+  "rizz.mp3": "Pixabay, u_hpfpehdmfy, Pixabay Content License (trimmed)",
+  "faaa.mp3": "Pixabay, Universfield, Pixabay Content License (trimmed)"
+ }
 }

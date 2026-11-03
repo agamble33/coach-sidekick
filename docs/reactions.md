@@ -43,3 +43,10 @@ Drop a 512x512 PNG in `assets/images/` (and optionally `assets/images/classic/`)
 `assets/sounds/`, and an entry in `reactions.json`. `tests/test_reactions.py` fails if a file is missing.
 Assets ship with the package via `[tool.setuptools.package-data]` in `pyproject.toml`; keep new
 extensions listed there.
+
+## Sound credits
+
+vine boom (Bithuh), bruh (freesound_community), rizz (u_hpfpehdmfy, trimmed) and the falling
+scream for missed jumps (Universfield, trimmed) are from Pixabay under the Pixabay Content
+License (royalty-free, no attribution required). The rest are synthesized in
+`scripts/reactions/`.

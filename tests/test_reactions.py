@@ -49,9 +49,9 @@ def test_fire_returns_payload(eng):
     p = eng.fire("missed_jump", "fell off the ledge")
     assert p and p["type"] == "reaction"
     assert p["image"] == "/reactions/images/classic/cackle.png"  # classic (the original memes) is the default pack
-    assert p["sound"] == "/reactions/sounds/womp.mp3"
+    assert p["sound"] == "/reactions/sounds/faaa.mp3"
     assert p["line"] in eng.reactions["missed_jump"].lines
-    assert p["show_ms"] == 2600 and p["context"] == "fell off the ledge"
+    assert p["show_ms"] == 3200 and p["context"] == "fell off the ledge"
 
 
 def test_unknown_trigger_is_safe(eng):
