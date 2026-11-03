@@ -152,8 +152,52 @@ app.state.profile = PlayerProfile(DATA / "profile.json")
 app.state.guard = Guard(DATA / "budget.json", Limits.from_env(), disabled=os.environ.get("COACH_DISABLED", "") in ("1", "true", "yes"))
 
 
+# Access codes: when COACH_ACCESS_CODES is set (comma separated), every /api call needs one, sent once
+# through POST /api/access and kept in a cookie. Each code is its own budget subject, so a judge's
+# code cannot drain another's, and a leaked page link without a code never reaches the model.
+ACCESS_CODES = {c.strip() for c in os.environ.get("COACH_ACCESS_CODES", "").split(",") if c.strip()}
+ACCESS_OPEN = ("/api/health", "/api/access", "/api/consent/version")
+ACCESS_COOKIE = "coach_code"
+
+
+def _code(request: Request) -> str:
+    c = request.cookies.get(ACCESS_COOKIE) or request.headers.get("x-coach-code") or ""
+    return c if c in ACCESS_CODES else ""
+
+
+@app.middleware("http")
+async def access_gate(request: Request, call_next):
+    path = request.url.path
+    if ACCESS_CODES and path.startswith("/api/") and path not in ACCESS_OPEN and not _code(request):
+        return JSONResponse({"detail": "access code required"}, status_code=401)
+    return await call_next(request)
+
+
+class AccessIn(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+
+
+@app.get("/api/access")
+def access_state(request: Request):
+    return {"required": bool(ACCESS_CODES), "ok": (not ACCESS_CODES) or bool(_code(request))}
+
+
+@app.post("/api/access")
+def access_enter(body: AccessIn, request: Request):
+    code = body.code.strip()
+    if ACCESS_CODES and code not in ACCESS_CODES:
+        raise HTTPException(403, "That access code is not valid")
+    resp = JSONResponse({"ok": True})
+    if ACCESS_CODES:
+        resp.set_cookie(ACCESS_COOKIE, code, max_age=60 * 60 * 24 * 14, httponly=True, samesite="lax", secure=request.url.scheme == "https")
+    return resp
+
+
 def _subject(request: Request) -> str:
-    """Who to count against: the consent id when present, else the client address."""
+    """Who to count against: the access code when there is one, else the consent id, else the client address."""
+    code = _code(request)
+    if code:
+        return "code:" + code[:24]
     cid = request.headers.get("x-coach-consent") or ""
     return cid[:32] if cid else (request.client.host if request.client else "anon")
 

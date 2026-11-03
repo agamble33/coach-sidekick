@@ -10,6 +10,8 @@ services:
     envVars:
       - key: META_API_KEY
         sync: false            # set in the Render dashboard, never in the repo
+      - key: COACH_ACCESS_CODES
+        sync: false            # comma separated invite codes for judges; see docs/guardrails.md
       - key: META_BASE_URL
         value: https://api.meta.ai/v1
       - key: COACH_DATA

@@ -48,3 +48,12 @@ What the player likes, per game, in `COACH_DATA/profile.json`: categories `contr
 
 `tests/test_guard.py` (5), `tests/test_scope.py` (3), `tests/test_profile.py` (5), plus web tests for
 the 429/503 paths and the profile API. Full suite: 233 tests.
+
+## Access codes for the hosted demo
+
+Set `COACH_ACCESS_CODES` to a comma separated list (for example `judge-7f3k,judge-2mq9,tony`). With
+it set, every `/api` call needs a code: the page asks for it once, `POST /api/access` sets a
+two-week cookie, and `/api/health`, `/api/access` and `/api/consent/version` stay open. Each code is
+its own daily budget subject (`code:<code>`), so one judge cannot drain another's allowance, and a
+link shared without a code never reaches the model. Without the variable the gate is off, which is
+what you want on your own PC. To revoke a code, remove it from the variable and redeploy.

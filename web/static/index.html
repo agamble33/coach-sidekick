@@ -530,6 +530,15 @@
     </div>
   </aside>
 </main>
+<div class="consent" id="access" hidden role="dialog" aria-modal="true" aria-labelledby="accessTitle">
+  <div class="sheet" style="max-width:420px">
+    <h2 id="accessTitle">Enter your access code</h2>
+    <p>This Coach pilot is invite only. Paste the code from your invite and you are in. No code, no model calls.</p>
+    <input id="accessCode" class="pb" type="text" autocomplete="off" placeholder="access code" style="width:100%;border:.8px solid var(--border);border-radius:12px;background:var(--surface);padding:10px 12px;font-size:16px;color:var(--text);outline:0">
+    <div class="err" id="accessErr"></div>
+    <div class="acts"><button id="accessGo" class="btn">Let me in</button></div>
+  </div>
+</div>
 <div class="consent" id="consent" hidden role="dialog" aria-modal="true" aria-labelledby="consentTitle">
   <div class="sheet">
     <h2 id="consentTitle">Before Coach can see or hear your game</h2>
@@ -565,7 +574,7 @@
     return d;
   }
   function showStats(st){ if(!st) return; $('st_records').textContent=st.records; $('st_labeled').textContent=st.labeled; $('st_up').textContent=st.up; $('st_frames').textContent=st.frames; }
-  async function loadStats(){ try{ showStats(await (await fetch('/api/annotations/stats')).json()); }catch(e){} }
+  async function loadStats(){ try{ const r=await fetch('/api/annotations/stats'); if(r.ok) showStats(await r.json()); }catch(e){} }
   function setStatus(t, live){ $('cstatus').textContent=t; $('avatar').classList.toggle('live', !!live); }
   // What a player sees for each tool call. Details (the raw call and result) stay one click away.
   let SHOW_DETAILS=false; try{ SHOW_DETAILS=localStorage.getItem('coachDetails')==='1'; }catch(e){}
@@ -608,6 +617,16 @@
   }
 
   // ---------- health ----------
+  // ---------- access code (hosted demo) ----------
+  async function accessGate(){
+    try{ const a=await (await fetch('/api/access')).json(); if(!a.required || a.ok) return; }catch(e){ return; }
+    $('access').hidden=false; $('accessCode').focus();
+    const go=async()=>{ const code=$('accessCode').value.trim(); if(!code) return; $('accessErr').textContent='';
+      const r=await fetch('/api/access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+      if(r.ok){ $('access').hidden=true; location.reload(); } else { const j=await r.json().catch(()=>({})); $('accessErr').textContent=j.detail||'That code did not work'; } };
+    $('accessGo').onclick=go; $('accessCode').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+  }
+  accessGate();
   fetch('/api/health').then(r=>r.json()).then(h=>{
     const c=$('status'); c.className='chip '+(h.ok?'ok':'bad'); c.innerHTML=`<span class="dot"></span>${h.ok?'Meta Model API connected':'Model API not configured'}`;
   }).catch(()=>{ $('status').className='chip bad'; $('status').innerHTML='<span class="dot"></span>Server offline'; });
@@ -632,7 +651,7 @@
       d.innerHTML=`<video src="/api/match/${state.match.id}/clips/${encodeURIComponent(n)}" controls preload="metadata" playsinline></video><span>${esc(n)}</span>`; c.appendChild(d); });
   }
   async function refreshMatch(){ if(!state.match) return; const m=await (await fetch(`/api/match/${state.match.id}`)).json(); state.match=m; renderClips(m.clips); }
-  async function loadMemory(){ const d=await (await fetch('/api/memory')).json(); const n=$('notes'); n.innerHTML=''; $('nonotes').hidden=d.notes.length>0;
+  async function loadMemory(){ let d; try{ const r=await fetch('/api/memory'); if(!r.ok) return; d=await r.json(); }catch(e){ return; } if(!d || !Array.isArray(d.notes)) return; const n=$('notes'); n.innerHTML=''; $('nonotes').hidden=d.notes.length>0;
     d.notes.slice().reverse().forEach(x=>{ const e=document.createElement('div'); e.className='note'; e.innerHTML=`<b>${esc(x.match)} · ${new Date(x.ts*1000).toLocaleString()}</b>${esc(x.text)}`; n.appendChild(e); }); }
   $('video').addEventListener('timeupdate',()=>{ const v=$('video'); if(!v.duration) return; $('timeline').classList.add('playing'); const p=v.currentTime/v.duration*100; $('played').style.width=p+'%'; $('head').style.left=p+'%'; });
   $('timeline').addEventListener('click',e=>{ if(e.target.classList.contains('mark')) return; const r=e.currentTarget.getBoundingClientRect(); const v=$('video'); v.currentTime=(e.clientX-r.left)/r.width*v.duration; });
@@ -957,7 +976,7 @@
   // ---------- studio playbook ----------
   const PB=['game','goal','controls','rules','tips','mistakes','audience'];
   function pbStatus(pb){ const c=$('pbStatus'); c.className='chip '+(pb?'ok':''); c.innerHTML=`<span class="dot"></span>${pb?esc(pb.game)+' loaded':'No playbook'}`; $('teach').disabled=!pb; if(!pb) $('teach').checked=false; }
-  async function loadPlaybook(){ try{ const d=await (await fetch('/api/playbook')).json(); const pb=d.playbook; PB.forEach(k=>{ $('pb_'+k).value=pb?(pb[k]||''):''; }); pbStatus(pb); }catch(e){} }
+  async function loadPlaybook(){ try{ const r=await fetch('/api/playbook'); if(!r.ok) return; const d=await r.json(); const pb=d.playbook; PB.forEach(k=>{ $('pb_'+k).value=pb?(pb[k]||''):''; }); pbStatus(pb); }catch(e){} }
   $('pbSave').onclick=async()=>{ const body={}; PB.forEach(k=>body[k]=$('pb_'+k).value);
     const r=await fetch('/api/playbook',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const j=await r.json();
     if(!r.ok){ add('msg err','Playbook not saved: '+(j.detail&&j.detail[0]&&j.detail[0].msg||j.detail||r.status)); return; }

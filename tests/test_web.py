@@ -649,3 +649,25 @@ def test_overlay_is_embedded_in_the_live_view_and_theater_exists(client):
     assert "openCorner(false)" in html and "navigator.userActivation" in html
     ov = client[0].get("/overlay?live=x&embed=1").text
     assert "embed=q.get('embed')" in ov or "q.get('embed')" in ov
+
+
+def test_access_codes_gate_the_api_and_budget_per_code(tmp_path, monkeypatch):
+    """Hosted demo: with COACH_ACCESS_CODES set, every /api call needs a code; health stays open; the code is the budget subject."""
+    monkeypatch.setenv("COACH_DATA", str(tmp_path / "data")); monkeypatch.setenv("COACH_ACCESS_CODES", "judge-one, judge-two")
+    import importlib, web.app as webapp
+    importlib.reload(webapp)
+    c = TestClient(webapp.app)
+    assert c.get("/").status_code == 200                       # the page itself loads
+    assert c.get("/api/health").status_code == 200
+    assert c.get("/api/access").json() == {"required": True, "ok": False}
+    assert c.get("/api/reactions").status_code == 401
+    assert c.post("/api/access", json={"code": "nope"}).status_code == 403
+    r = c.post("/api/access", json={"code": "judge-one"})
+    assert r.status_code == 200 and "coach_code" in r.cookies
+    assert c.get("/api/access").json() == {"required": True, "ok": True}
+    assert c.get("/api/reactions").status_code == 200
+    class Req:  # subject is the code, so budgets are per judge
+        cookies = {"coach_code": "judge-one"}; headers = {}; client = None
+    assert webapp._subject(Req()) == "code:judge-one"
+    monkeypatch.delenv("COACH_ACCESS_CODES"); importlib.reload(webapp)
+    assert TestClient(webapp.app).get("/api/access").json() == {"required": False, "ok": True}

@@ -100,7 +100,7 @@ pilot terms, self-serve data deletion, and the highlight reel.
 ## Links
 
 - Repo: https://github.com/agamble33/coach-sidekick
-- Hosted demo: [Render URL, set after the service is created from render.yaml]
+- Hosted demo: [Render URL] with access code [code] (invite only; each code has its own daily budget, see docs/guardrails.md)
 - Demo video: [link]
 - Try it in 3 minutes: README, "For judges"
 
