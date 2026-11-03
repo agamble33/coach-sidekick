@@ -167,7 +167,7 @@
   .step .t .ok{color:var(--green)}
   .step.plain{background:transparent;border:0;padding:2px 4px;font-size:13px;color:var(--text-2)}
   .step.plain .t{font-weight:500;color:var(--text-2)} .step.plain .a,.step.plain .o{display:none}
-  #gameTag{background:var(--blue-tint);color:var(--blue)}
+  #gameTag{background:var(--blue-tint);color:var(--blue)} #gameTag[hidden]{display:none}
   #listen.on{background:var(--green);color:#06130D}
   #listen.on .pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:#06130D;animation:pulse 1.2s infinite}
   .step .a,.step .o{margin-top:4px;color:var(--text-2);font-family:var(--mono);font-size:12px;white-space:pre-wrap;word-break:break-all}
@@ -255,6 +255,23 @@
   #rxBar{border-left:3px solid var(--pink)}
   #sdkBox{border-left:3px solid var(--blue)}
   .timeline .mark{background:var(--blue)}
+  /* hero banner + big, kid-friendly start buttons */
+  .hero{padding:0 0 22px;overflow:hidden}
+  .hero .banner{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:var(--r-lg) var(--r-lg) 0 0;margin:0 0 18px}
+  .hero h1,.hero>p,.hero .starts,.hero .aud,.hero #upmsg{margin-left:24px;margin-right:24px}
+  .hero h1{font-size:28px}
+  .starts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+  .btn.big{height:auto;min-height:72px;padding:12px 16px;justify-content:flex-start;gap:12px;font-size:17px;text-align:left;clip-path:none !important;border-radius:14px !important}
+  .btn.big svg{width:28px;height:28px;flex:none}
+  .btn.big b{display:block;font:700 18px/1.2 var(--hud);letter-spacing:.02em}
+  .btn.big small{display:block;font-size:13px;font-weight:500;opacity:.8;margin-top:2px}
+  .btn.big:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(25,230,140,.25)}
+  :root:not([data-theme="light"]) .btn.big.alt{background:var(--surface);color:var(--text);box-shadow:inset 0 0 0 1.5px var(--border)}
+  :root:not([data-theme="light"]) .btn.big.alt:hover{box-shadow:inset 0 0 0 1.5px var(--blue),0 8px 24px rgba(25,230,140,.15)}
+  @media (max-width:700px){.starts{grid-template-columns:1fr} .hero h1{font-size:23px}}
+  /* bigger live controls */
+  #liveMain .btn{height:44px;padding:0 18px;font-size:15px}
+  #liveMain .toggle{font-size:15px;gap:8px} #liveMain .toggle input{width:20px;height:20px}
   /* Quest-style dock: one translucent pill bar, icon + label per section */
   .dock{position:sticky;top:60px;z-index:4;display:flex;justify-content:center;gap:4px;padding:8px 12px;margin:0 auto;width:max-content;max-width:calc(100% - 32px);border-radius:9999px;background:rgba(18,23,34,.82);border:1px solid var(--border);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 10px 30px rgba(0,0,0,.35);transform:translateY(12px)}
   :root[data-theme="light"] .dock{background:rgba(255,255,255,.85)}
@@ -301,22 +318,25 @@
 <main class="wrap">
   <section class="stack">
     <div id="hero" class="hero">
-      <div class="eyebrow">In-game AI sidekick · Built on Meta Model API</div>
+      <img class="banner" src="/static/banner.jpg" alt="Coach, your in-game sidekick: a player in a VR headset with the Coach robot beside him" width="1600" height="900">
       <h1>Coach plays with you, not for you.</h1>
-      <p>Live strategy while you play, a guide that teaches new players by playing alongside them, and a teammate that remembers what happened last match. Coach sees the game, hears you, talks back, and acts.</p>
-      <div class="row">
-        <label class="btn" for="file">
+      <p>Coach watches your game, talks in your ear, points the way when you're lost, and drops a meme when you mess up. Pick one to start.</p>
+      <div class="starts">
+        <button id="golive" class="btn big">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span><b>Play with Coach</b><small>Share your game screen</small></span>
+        </button>
+        <button id="sample" class="btn big alt">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span><b>Try a demo match</b><small>No setup, see it work</small></span>
+        </button>
+        <label class="btn big alt" for="file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Load a match video
+          <span><b>Load my video</b><small>Coach reviews a match</small></span>
         </label>
         <input id="file" type="file" accept=".mp4,.mkv,.mov,.webm,video/*" hidden>
-        <button id="sample" class="btn secondary">Use the sample match</button>
-        <button id="golive" class="btn secondary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          Go live: share my game
-        </button>
-        <span id="upmsg" class="status" style="color:var(--text-2);font-size:13px"></span>
       </div>
+      <span id="upmsg" class="status" style="color:var(--text-2);font-size:13px"></span>
       <div class="aud">
         <div><b>For players</b>A teammate on voice chat that watches your screen, calls out what matters, and clips the plays worth keeping.</div>
         <div><b>For studios</b>Drop in a playbook and Coach onboards new players inside the game. No training portal, no tutorial level to build.</div>
@@ -500,11 +520,11 @@
 
   <aside class="card coach">
     <div class="head">
-      <div id="avatar" class="avatar">C</div>
+      <div id="avatar" class="avatar" style="background:url(/static/favicon.png) center/cover" aria-label="Coach"></div>
       <div><div style="font-weight:600">Coach <span id="gameTag" class="chip" style="height:22px;font-size:12px;margin-left:6px" hidden></span></div><div id="cstatus" class="status">Ready when you are</div></div>
     </div>
     <div id="feed" class="feed">
-      <div class="msg from-coach">Hey, I'm Coach. Load a match and tell me what you want: a read on a moment, the best clip, or what we learned last time.</div>
+      <div class="msg from-coach">Hey, I'm Coach! Press <b>Play with Coach</b> and I'll watch your game with you. You can type here, hold the mic, or press the headset button and just say "Coach, where do I go?"</div>
     </div>
     <div class="tips" id="tips">
       <button class="tip" data-t="What's happening at 15 seconds?" data-mode="match">What's happening at 15 seconds?</button><button class="tip" data-t="What do you see right now?" data-mode="live" hidden>What do you see right now?</button><button class="tip" data-t="What should I do next?" data-mode="live" hidden>What should I do next?</button><button class="tip" data-t="I'm new. What are the controls and what am I trying to do?" data-mode="live" hidden>I'm new, teach me</button>

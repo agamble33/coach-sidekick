@@ -671,3 +671,12 @@ def test_access_codes_gate_the_api_and_budget_per_code(tmp_path, monkeypatch):
     assert webapp._subject(Req()) == "code:judge-one"
     monkeypatch.delenv("COACH_ACCESS_CODES"); importlib.reload(webapp)
     assert TestClient(webapp.app).get("/api/access").json() == {"required": False, "ok": True}
+
+
+def test_hero_banner_and_big_start_buttons(client):
+    c, _ = client
+    html = c.get("/").text
+    assert 'class="banner" src="/static/banner.jpg"' in html and c.get("/static/banner.jpg").status_code == 200
+    for label in ("Play with Coach", "Try a demo match", "Load my video"):
+        assert label in html
+    assert 'class="btn big"' in html and "#gameTag[hidden]{display:none}" in html
