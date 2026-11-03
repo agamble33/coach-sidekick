@@ -9,7 +9,6 @@ a missed jump, a dumb play, an ignored callout, a whiff, a near-death, a clutch,
 2. In the Live card, the **Meme reactions** row:
    - **Meme reactions** checkbox: on or off.
    - **Spice**: `mild` is the normal set; `unhinged` adds the wilder cards.
-   - **Style**: `classic` (default) shows the original memes, or `3D` for rendered cards.
    - **Coach is**: who Coach looks like on the badge and cards: Muse Bot (default), Coach, or Dog.
    - **Test reaction**: fires one so you can see and hear it.
 3. Sounds play on the overlay page. Browsers mute a page until you click it once; if a sting was
@@ -21,7 +20,7 @@ Settings stick per browser and are re-sent each time you go live.
 
 - `src/coach/reactions/engine.py`: `ReactionEngine` maps a trigger to a card + sting + spoken line,
   with an 8 s per-trigger cooldown and a 3 s global cooldown. `spice` gates which triggers can fire
-  (`off` disables everything). `pack` picks the image set (`classic` falls back to `3d` per trigger).
+  (`off` disables everything). `pack` picks the image set (only `3d`, our own rendered cards, ships).
   `avatar` is purely cosmetic.
 - `react` is a normal Coach tool (see `tools.py`); the agent decides when a moment earns one. It is in
   `LIVE_TICK_TOOLS`, and the watch prompt tells Coach when to use it. A suppressed reaction returns
@@ -39,7 +38,7 @@ synthesized. Avatars: `assets/avatars/`. Raw sources and regen scripts: `scripts
 
 ## Add a reaction
 
-Drop a 512x512 PNG in `assets/images/` (and optionally `assets/images/classic/`), an mp3 in
+Drop a 512x512 PNG in `assets/images/`, an mp3 in
 `assets/sounds/`, and an entry in `reactions.json`. `tests/test_reactions.py` fails if a file is missing.
 Assets ship with the package via `[tool.setuptools.package-data]` in `pyproject.toml`; keep new
 extensions listed there.

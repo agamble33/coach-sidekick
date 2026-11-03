@@ -357,7 +357,7 @@ def test_overlay_settings_layout_and_hidden(client):
     assert TestClient(webapp.app).post(f"/api/overlay/{lid}/settings", json={"hidden": True}).status_code == 403
     r = c.post(f"/api/overlay/{lid}/settings", json={"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"}})
     assert r.status_code == 200 and r.json() == {"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"},
-                                                 "spice": "mild", "pack": "classic", "avatar": "muse_bot", "guide": False,
+                                                 "spice": "mild", "pack": "3d", "avatar": "muse_bot", "guide": False,
                                                  "reactions": r.json()["reactions"]}
     st = c.get(f"/api/overlay/{lid}").json()
     assert st["hidden"] is True and st["layout"]["tasks"] == "tr"
@@ -401,16 +401,16 @@ def test_reactions_assets_settings_and_demo(client):
     c, webapp = client
     # static assets are mounted where engine payloads point
     assert c.get("/reactions/images/cackle.png").status_code == 200
-    assert c.get("/reactions/images/classic/horse_judge.png").status_code == 200
+    assert c.get("/reactions/images/horse_judge.png").status_code == 200
     assert c.get("/reactions/sounds/womp.mp3").status_code == 200
     lid = c.post("/api/live/start").json()["live_id"]
     # demo fills in a reaction card alongside the highlights and tasks
     demo = c.post(f"/api/overlay/{lid}/demo").json()
     assert demo["reaction"] and demo["reaction"]["trigger"] == "missed_jump"
-    assert demo["reaction"]["image"] == "/reactions/images/classic/cackle.png" and demo["reaction"]["sound"].endswith(".mp3")
+    assert demo["reaction"]["image"] == "/reactions/images/cackle.png" and demo["reaction"]["sound"].endswith(".mp3")
     # settings: spice and pack round-trip, bad values are 400
-    r = c.post(f"/api/overlay/{lid}/settings", json={"spice": "unhinged", "pack": "classic"})
-    assert r.status_code == 200 and r.json()["spice"] == "unhinged" and r.json()["pack"] == "classic"
+    r = c.post(f"/api/overlay/{lid}/settings", json={"spice": "unhinged", "pack": "3d"})
+    assert r.status_code == 200 and r.json()["spice"] == "unhinged" and r.json()["pack"] == "3d"
     assert c.post(f"/api/overlay/{lid}/settings", json={"spice": "nuclear"}).status_code == 400
     assert c.post(f"/api/overlay/{lid}/settings", json={"pack": "vhs"}).status_code == 400
     # overlay page carries the reaction card markup

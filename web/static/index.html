@@ -360,7 +360,7 @@
         <div id="rxBar" class="row" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--surface)">
           <span class="hudtag pink">LOADOUT</span>
           <label class="toggle" title="How spicy Coach gets. Mild is the normal set; Unhinged adds the wilder cards">Spice <select id="rx_spice"><option value="mild">mild</option><option value="unhinged">unhinged</option></select></label>
-          <label class="toggle" title="Classic: the original memes. 3D: rendered cards">Style <select id="rx_pack"><option value="classic">classic</option><option value="3d">3D</option></select></label>
+          <select id="rx_pack" hidden><option value="3d">3D</option></select>
           <label class="toggle" title="Who Coach looks like on the overlay badge and reaction cards">Coach is <select id="rx_avatar"><option value="muse_bot">Muse Bot</option><option value="coach">Coach</option><option value="dog">Dog</option></select></label>
           <button id="rx_test" class="btn secondary" title="Fire one reaction on the overlay so you can see and hear it">Test reaction</button>
           <button id="gd_test" class="btn secondary" title="Draw a sample arrow on the overlay">Test arrow</button>
@@ -406,7 +406,7 @@
       <div class="feats">
         <div class="feat fun"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
-          <b>Meme reactions</b><span>Whiff a jump, ignore a callout, or start flirting mid-match and Coach flashes a meme card with a sound on your overlay. Turn it on in Live mode: Meme reactions, pick a spice level, a 3D or classic style, and who Coach is (Muse Bot, Coach or Dog). Hit Test reaction to hear it.</span><em class="live">Live</em></div>
+          <b>Meme reactions</b><span>Whiff a jump, ignore a callout, or start flirting mid-match and Coach flashes a meme card with a sound on your overlay. Turn it on in Live mode: Meme reactions, pick a spice level and who Coach is (Muse Bot, Coach or Dog). Hit Test reaction to hear it.</span><em class="live">Live</em></div>
         <div class="feat"><div class="fi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
           <b>Sees the game</b><span>Ask about any second of the match. Coach pulls the frame and reads it with Muse Spark vision.</span><em class="live">Live</em></div>
@@ -863,7 +863,7 @@
   // ---- meme reactions: on/off, spice, style, avatar. Kept per browser, pushed with the layout. ----
   const RX_KEY='coachReactions';
   function rxFromUI(){ return {spice: $('rx_on').checked ? $('rx_spice').value : 'off', pack:$('rx_pack').value, avatar:$('rx_avatar').value, guide:$('gd_on').checked}; }
-  (function(){ try{ const R=JSON.parse(localStorage.getItem(RX_KEY)||'null'); if(R){ $('rx_on').checked=R.spice!=='off'; if(R.spice&&R.spice!=='off') $('rx_spice').value=R.spice; if(R.pack) $('rx_pack').value=R.pack; if(R.avatar) $('rx_avatar').value=R.avatar; $('gd_on').checked=!!R.guide; } }catch(e){} })();
+  (function(){ try{ const R=JSON.parse(localStorage.getItem(RX_KEY)||'null'); if(R){ $('rx_on').checked=R.spice!=='off'; if(R.spice&&R.spice!=='off') $('rx_spice').value=R.spice;  if(R.avatar) $('rx_avatar').value=R.avatar; $('gd_on').checked=!!R.guide; } }catch(e){} })();
   function rxSync(){ $('rx_spice').disabled=!$('rx_on').checked; try{ localStorage.setItem(RX_KEY, JSON.stringify(rxFromUI())); }catch(e){} pushOverlaySettings(rxFromUI()); }
   for(const id of ['rx_on','rx_spice','rx_pack','rx_avatar','gd_on']) $(id).onchange=rxSync;
   $('gd_test').onclick=async()=>{

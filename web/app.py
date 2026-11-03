@@ -421,7 +421,7 @@ class OverlaySettingsIn(BaseModel):
     hidden: bool | None = None
     layout: dict | None = None
     spice: str | None = None     # reactions: off | mild | unhinged
-    pack: str | None = None      # reactions: 3d | classic
+    pack: str | None = None      # reactions: 3d
     avatar: str | None = None    # reactions: muse_bot | coach | dog
     guide: bool | None = None    # Guide me: let Coach draw arrows and routes
 

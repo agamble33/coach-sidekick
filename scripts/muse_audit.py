@@ -137,7 +137,7 @@ def main():
 
     # ---------- live mode ----------
     st, live = j("POST", "/api/live/start", {}, H); lid = live["live_id"]
-    j("POST", f"/api/overlay/{lid}/settings", {"guide": False, "spice": "unhinged", "pack": "classic", "avatar": "muse_bot"}, H)
+    j("POST", f"/api/overlay/{lid}/settings", {"guide": False, "spice": "unhinged", "pack": "3d", "avatar": "muse_bot"}, H)
     post_frame(lid, H, frame_jpeg(["HP 70   Objective: find the east gate key"]))
     r = turn(H, live_id=lid, text="Quick, what should I do right now?")
     check("Live strategy reply", "Muse Spark vision", r["reply"] and not r["errors"], r)

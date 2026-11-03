@@ -48,7 +48,7 @@ def test_config_shape():
 def test_fire_returns_payload(eng):
     p = eng.fire("missed_jump", "fell off the ledge")
     assert p and p["type"] == "reaction"
-    assert p["image"] == "/reactions/images/classic/cackle.png"  # classic (the original memes) is the default pack
+    assert p["image"] == "/reactions/images/cackle.png"  # 3d (our own cards) is the only pack
     assert p["sound"] == "/reactions/sounds/faaa.mp3"
     assert p["line"] in eng.reactions["missed_jump"].lines
     assert p["show_ms"] == 3200 and p["context"] == "fell off the ledge"
@@ -129,30 +129,24 @@ def test_lines_rotate(eng, clk):
     assert len(seen) == len(eng.reactions["clutch"].lines)
 
 
-def test_pack_classic_uses_polished_original_when_present(clk):
-    e = ReactionEngine(clock=clk, spice="unhinged", pack="classic")
-    p = e.fire("dumb_play")  # horse has a classic version
-    assert p["image"] == "/reactions/images/classic/horse_judge.png" and p["pack"] == "classic"
-    assert (ROOT / "assets/images/classic/horse_judge.png").is_file()
-
-
-def test_pack_classic_falls_back_to_3d_when_missing(clk):
-    e = ReactionEngine(clock=clk, spice="unhinged", pack="classic")
-    p = e.fire("rizz_detected")  # no safe original for this one
-    assert p["image"] == "/reactions/images/rizz.png"
-    assert not (ROOT / "assets/images/classic/rizz.png").exists()
+def test_only_original_3d_pack_ships(clk):
+    raw = json.loads((ROOT / "reactions.json").read_text())
+    assert raw["packs"] == {"3d": "images"} and raw["default_pack"] == "3d"
+    assert not (ROOT / "assets/images/classic").exists()  # no third-party meme photos in the repo
+    with pytest.raises(ReactionError):
+        ReactionEngine(clock=clk, pack="classic")
 
 
 def test_set_pack_validates(eng):
     with pytest.raises(ReactionError):
         eng.set_pack("vhs")
-    eng.set_pack("classic")
-    assert eng.fire("slow_reaction")["image"].endswith("classic/sleepy_dog.png")
+    eng.set_pack("3d")
+    assert eng.fire("slow_reaction")["image"] == "/reactions/images/sleepy_dog.png"
 
 
-def test_every_classic_card_is_512_square():
+def test_every_card_is_512_square():
     PIL = pytest.importorskip("PIL.Image")
-    for p in (ROOT / "assets/images/classic").glob("*.png"):
+    for p in (ROOT / "assets/images").glob("*.png"):
         assert PIL.open(p).size == (512, 512), p
 
 
@@ -206,13 +200,12 @@ def test_packaged_assets_are_declared():
     assert '"coach.reactions"' in txt and "assets/**/*.png" in txt and "assets/**/*.mp3" in txt
 
 
-def test_classic_is_default_and_rizz_falls_back_to_3d(eng):
-    assert eng.pack == "classic"
-    assert eng.fire("clutch")["image"] == "/reactions/images/classic/big_brain.png"
+def test_3d_is_default(eng):
+    assert eng.pack == "3d"
+    assert eng.fire("clutch")["image"] == "/reactions/images/big_brain.png"
     eng._last_any = float("-inf")  # skip the global cooldown
     p = eng.fire("rizz_detected")
     assert p and p["image"] == "/reactions/images/rizz.png"
-
 
 def test_every_trigger_has_its_own_sound_variety_and_five_lines():
     raw = json.loads((ROOT / "reactions.json").read_text())

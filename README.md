@@ -43,7 +43,7 @@ No other model, hosted or local, is called at runtime.
 | Guardrails | Per-session rate limits, a daily token budget from real API usage, a kill switch, and a scope rule that keeps Coach on the game (off-topic redirects are counted). See docs/guardrails.md | Live |
 | In-game SDK | Two HTTP calls make Coach part of a game: the game posts player, objective, landmarks and events; Coach returns arrows anchored to landmark ids, routes, callouts and reactions. Unity reference client in sdk/unity, fake game in sdk/python. See docs/game-sdk.md | Live |
 | Guide me | Off by default. Turn it on and Coach shows the way: an arrow at the spot, an edge arrow with a direction when it is off screen, numbered waypoints for multi-step routes. The point and route tools are only offered to the model while Guide me is on | Live |
-| Meme reactions | Coach flashes a meme card with a sound sting on the overlay when you whiff, ignore a callout, pull off a clutch, or start flirting mid-match. Player settings: on/off, spice, 3D or classic style, and who Coach is (Muse Bot, Coach, Dog). See docs/reactions.md | Live |
+| Meme reactions | Coach flashes a meme card with a sound sting on the overlay when you whiff, ignore a callout, pull off a clutch, or start flirting mid-match. Player settings: on/off, spice, and who Coach is (Muse Bot, Coach, Dog). See docs/reactions.md | Live |
 | Highlight reel | Clips stitched into a reel with poster frames from Muse Image | On the way |
 
 ## What was built during the hackathon

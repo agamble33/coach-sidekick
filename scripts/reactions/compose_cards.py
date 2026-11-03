@@ -1,5 +1,5 @@
 """Compose final 512x512 reaction cards from assets/images/gen/*.png (3D renders)
-plus the selfie: rounded corners, bottom caption bar. Writes assets/images/*.png
+rounded corners, bottom caption bar. Writes assets/images/*.png
 and a contact sheet. Also rasterizes any gen/*.svg first."""
 import asyncio
 from pathlib import Path
@@ -20,7 +20,6 @@ CAPTIONS = {
     "rizz": "RIZZ DETECTED",
     "coach_selfie": "YOU SAW THAT?",
 }
-SELFIE = Path("/root/.claude/uploads/a54c07fa-90e5-5a70-9411-5f657e36d0b7/0f5fa5e0-image.jpg")
 
 
 async def rasterize():
@@ -34,13 +33,6 @@ async def rasterize():
             await pg.goto(s.resolve().as_uri())
             await pg.screenshot(path=str(s.with_suffix(".png")))
         await b.close()
-
-
-def selfie_square():
-    im = Image.open(SELFIE)
-    w, h = im.size
-    side = int(w * 0.92)
-    return im.crop((int(w * 0.04), int(h * 0.25), int(w * 0.04) + side, int(h * 0.25) + side))
 
 
 def card(src: Image.Image, caption: str) -> Image.Image:
@@ -69,9 +61,7 @@ def build_pack(src_dir: Path, out_dir: Path, sheet_name: str):
     done = []
     for name, cap in CAPTIONS.items():
         p = src_dir / f"{name}.png"
-        if name == "coach_selfie" and not p.exists():
-            src = selfie_square()
-        elif p.exists():
+        if p.exists():
             src = Image.open(p)
         else:
             continue  # pack doesn't cover this trigger; engine falls back to default pack
@@ -89,7 +79,6 @@ def build_pack(src_dir: Path, out_dir: Path, sheet_name: str):
 def main():
     asyncio.run(rasterize())
     build_pack(GEN, IMG, "contact_sheet.png")                       # default "3d" pack
-    build_pack(IMG / "gen_classic", IMG / "classic", "contact_sheet_classic.png")
 
 
 if __name__ == "__main__":
