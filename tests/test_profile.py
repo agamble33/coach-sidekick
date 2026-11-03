@@ -89,3 +89,19 @@ def test_agent_saves_a_preference_from_the_player(tmp_path):
                     "usage": {"input_tokens": 1, "output_tokens": 1}}])
     CoachAgent(MetaClient(load_settings(ENV), t2), s).turn(WATCH_PROMPT)
     assert "master_volume=40%" in t2.payloads[0]["instructions"]      # known next time
+
+
+def test_skill_notes_are_a_category_and_reach_the_prompt(tmp_path):
+    from coach.profile import PlayerProfile
+    p = PlayerProfile(tmp_path / "p.json")
+    p.set("Rocket Rally", "skills", "aim", "strong")
+    p.set("Rocket Rally", "skills", "map_awareness", "weak, loses track of flanks")
+    text = p.as_prompt("Rocket Rally")
+    assert "skills: aim=strong; map_awareness=weak, loses track of flanks" in text
+    assert "coach toward the weak spots" in text
+    assert "skills" not in PlayerProfile(tmp_path / "q.json").as_prompt("Rocket Rally")   # no note, no coaching line
+
+
+def test_remember_preference_tool_accepts_skills():
+    from coach.tools import TOOLS
+    assert "skills" in TOOLS["remember_preference"].spec()["parameters"]["properties"]["category"]["enum"]

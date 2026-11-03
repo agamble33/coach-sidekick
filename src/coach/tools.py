@@ -539,9 +539,11 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
          {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"],
           "additionalProperties": False}, t_callout),
     Tool("remember_preference", "Save how the player likes this game set up, so next time Coach can get it right: a control "
-         "binding or sensitivity, a sound level, a display setting (brightness, FOV), or how they like to play.",
+         "binding or sensitivity, a sound level, a display setting (brightness, FOV), how they like to play, or a skill "
+         "note: something you have seen them do well or struggle with (category skills, e.g. name=aim value=strong, "
+         "name=map_awareness value=weak, loses track of flanks).",
          {"type": "object", "properties": {"category": {"type": "string", "enum": list(PREF_CATEGORIES)},
-                                           "name": {"type": "string", "description": "e.g. look_sensitivity, master_volume, brightness, invert_y"},
+                                           "name": {"type": "string", "description": "e.g. look_sensitivity, master_volume, brightness, invert_y, aim, map_awareness"},
                                            "value": {"type": "string", "description": "e.g. 6, 40%, inverted, on"},
                                            "game": {"type": "string", "description": "defaults to the current game; 'any game' for everything"}},
           "required": ["category", "name", "value"], "additionalProperties": False}, t_remember_preference),

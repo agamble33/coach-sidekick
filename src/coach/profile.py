@@ -9,7 +9,7 @@ import os
 import time
 from pathlib import Path
 
-CATEGORIES = ("controls", "sound", "display", "play")   # play = pace, tone, how much Coach talks
+CATEGORIES = ("controls", "sound", "display", "play", "skills")   # play = pace, tone, how much Coach talks; skills = what Coach has seen them do well or struggle with
 MAX_PER_GAME = 24
 MAX_VALUE = 120
 
@@ -94,6 +94,9 @@ class PlayerProfile:
                 lines.append(f"{cat}: " + "; ".join(items))
         lines.append("If a setting looks different from this on screen, say so once and offer to walk them through it. "
                      "When they tell you a new preference, save it with remember_preference.")
+        if any(e["category"] == "skills" for e in {**general, **prefs}.values()):
+            lines.append("skills are things you have seen this player do well or struggle with. Mention them once when the "
+                         "session starts, coach toward the weak spots without nagging, and update them when you see change.")
         return "\n".join(lines)
 
     def snapshot(self) -> dict:

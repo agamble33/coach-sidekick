@@ -48,3 +48,8 @@ def test_bare_marker_gets_a_default_line(tmp_path):
     s = Session(work_dir=tmp_path, memory=MatchMemory(tmp_path / "m.json"))
     a = CoachAgent(MetaClient(load_settings(ENV), Scripted([msg("Offside")])), s)
     assert a.turn("tell me a joke about my boss").text == "I only do game stuff. What's happening on screen?"
+
+
+def test_coach_asks_instead_of_guessing():
+    from coach.coach_llm import COACH_SYSTEM
+    assert "ask one short question instead of guessing" in COACH_SYSTEM
