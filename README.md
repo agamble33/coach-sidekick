@@ -138,4 +138,4 @@ Coach writes its data (matches, clips, memory, playbook, annotation records and 
 
 ## License
 
-MIT
+[PolyForm Noncommercial 1.0.0](LICENSE). Free to read, run, and judge; commercial use needs written permission from Goals and Gambles LLC.
