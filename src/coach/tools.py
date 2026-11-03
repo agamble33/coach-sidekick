@@ -195,7 +195,7 @@ class Session:
     last_observation: str = ""
     last_record_id: str = ""
     overlay: Overlay = field(default_factory=Overlay)
-    reactions: ReactionEngine = field(default_factory=lambda: ReactionEngine(spice="mild", pack="3d"))
+    reactions: ReactionEngine = field(default_factory=lambda: ReactionEngine(spice="mild", pack="classic"))
     game_state: GameState = field(default_factory=GameState)   # Gate 12: what an SDK-integrated game reports
     profile: "PlayerProfile | None" = None                       # Gate 13: the player's preferences per game
     incidents: IncidentStore | None = None

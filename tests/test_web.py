@@ -357,7 +357,7 @@ def test_overlay_settings_layout_and_hidden(client):
     assert TestClient(webapp.app).post(f"/api/overlay/{lid}/settings", json={"hidden": True}).status_code == 403
     r = c.post(f"/api/overlay/{lid}/settings", json={"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"}})
     assert r.status_code == 200 and r.json() == {"hidden": True, "layout": {"tasks": "tr", "callout": "bottom", "badge": "off"},
-                                                 "spice": "mild", "pack": "3d", "avatar": "muse_bot", "guide": False,
+                                                 "spice": "mild", "pack": "classic", "avatar": "muse_bot", "guide": False,
                                                  "reactions": r.json()["reactions"]}
     st = c.get(f"/api/overlay/{lid}").json()
     assert st["hidden"] is True and st["layout"]["tasks"] == "tr"
@@ -407,7 +407,7 @@ def test_reactions_assets_settings_and_demo(client):
     # demo fills in a reaction card alongside the highlights and tasks
     demo = c.post(f"/api/overlay/{lid}/demo").json()
     assert demo["reaction"] and demo["reaction"]["trigger"] == "missed_jump"
-    assert demo["reaction"]["image"] == "/reactions/images/cackle.png" and demo["reaction"]["sound"].endswith(".mp3")
+    assert demo["reaction"]["image"] == "/reactions/images/classic/cackle.png" and demo["reaction"]["sound"].endswith(".mp3")
     # settings: spice and pack round-trip, bad values are 400
     r = c.post(f"/api/overlay/{lid}/settings", json={"spice": "unhinged", "pack": "classic"})
     assert r.status_code == 200 and r.json()["spice"] == "unhinged" and r.json()["pack"] == "classic"
@@ -546,3 +546,35 @@ def test_profile_api(client):
     assert c.get("/api/profile").json()["games"]["kid kart"]["invert_y"]["value"] == "on"
     assert c.delete("/api/profile", params={"game": "Kid Kart", "name": "invert_y"}).json()["removed"] == 1
     assert c.get("/api/profile").json() == {"games": {}}
+
+
+def test_bad_model_config_is_a_clear_503_not_a_crash(client):
+    from coach.config import ConfigError
+    c, webapp = client
+    lid = c.post("/api/live/start").json()["live_id"]
+    def broken():
+        raise ConfigError("META_BASE_URL must be an https URL")
+    old = webapp.app.state.client_factory
+    webapp.app.state.client_factory = broken
+    try:
+        r = c.post(f"/api/overlay/{lid}/settings", json={"guide": True})
+        assert r.status_code == 503 and "https" in r.json()["detail"]
+    finally:
+        webapp.app.state.client_factory = old
+    c.post(f"/api/live/{lid}/stop")
+
+
+def test_page_scripts_parse():
+    """A single stray quote once killed every button on the dashboard. Parse each page's script with node."""
+    import re, shutil, subprocess, tempfile
+    from pathlib import Path
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    for page in ("index.html", "overlay.html"):
+        html = (Path(__file__).resolve().parents[1] / "web" / "static" / page).read_text(encoding="utf-8")
+        js = "\n".join(re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S))
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
+            f.write(js)
+        r = subprocess.run([node, "--check", f.name], capture_output=True, text=True)
+        assert r.returncode == 0, f"{page}: {r.stderr[:400]}"

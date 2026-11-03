@@ -42,7 +42,7 @@ class ReactionEngine:
     config_path: Path = CONFIG
     assets_dir: Path = ASSETS
     spice: str = "mild"
-    pack: str = "3d"  # "3d" (default renders) or "classic" (polished originals, falls back per trigger)
+    pack: str = "classic"  # "classic" (the original memes, default) or "3d" (rendered cards); classic falls back to 3D per trigger
     avatar: str = ""  # who Coach looks like on the overlay badge and reaction card; "" = config default
     clock: Callable[[], float] = time.monotonic
     rng: random.Random = field(default_factory=random.Random)

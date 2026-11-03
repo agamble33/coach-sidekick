@@ -48,7 +48,7 @@ def test_config_shape():
 def test_fire_returns_payload(eng):
     p = eng.fire("missed_jump", "fell off the ledge")
     assert p and p["type"] == "reaction"
-    assert p["image"] == "/reactions/images/cackle.png"
+    assert p["image"] == "/reactions/images/classic/cackle.png"  # classic (the original memes) is the default pack
     assert p["sound"] == "/reactions/sounds/womp.mp3"
     assert p["line"] in eng.reactions["missed_jump"].lines
     assert p["show_ms"] == 2600 and p["context"] == "fell off the ledge"
@@ -204,3 +204,11 @@ def test_packaged_assets_are_declared():
     # Render pip-installs the project; without package-data the cards would 404 in production.
     txt = (ROOT.parent.parent.parent / "pyproject.toml").read_text()
     assert '"coach.reactions"' in txt and "assets/**/*.png" in txt and "assets/**/*.mp3" in txt
+
+
+def test_classic_is_default_and_rizz_falls_back_to_3d(eng):
+    assert eng.pack == "classic"
+    assert eng.fire("clutch")["image"] == "/reactions/images/classic/big_brain.png"
+    eng._last_any = float("-inf")  # skip the global cooldown
+    p = eng.fire("rizz_detected")
+    assert p and p["image"] == "/reactions/images/rizz.png"

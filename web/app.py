@@ -44,7 +44,7 @@ from pydantic import BaseModel, Field
 from coach.agent import TEACH_PROMPT, WATCH_PROMPT, CoachAgent
 from coach.annotations import AnnotationStore
 from coach.clips import detect_audio_events, detect_scene_events
-from coach.config import load_settings
+from coach.config import ConfigError, load_settings
 from coach.health import health_report
 from coach.incidents import STATUSES, IncidentStore
 from coach.ingest import VIDEO_SUFFIXES, IngestError, probe
@@ -293,7 +293,7 @@ def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
                     raise HTTPException(404, "live session not found")
             try:
                 client = app.state.client_factory()
-            except MetaAPIError as exc:
+            except (MetaAPIError, ConfigError) as exc:
                 raise HTTPException(503, str(exc))
             session = Session(work_dir=Path(meta["video"]).parent if meta else DATA / "scratch",
                               memory=app.state.memory, profile=app.state.profile,

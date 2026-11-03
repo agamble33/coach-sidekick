@@ -9,7 +9,7 @@ a missed jump, a dumb play, an ignored callout, a whiff, a near-death, a clutch,
 2. In the Live card, the **Meme reactions** row:
    - **Meme reactions** checkbox: on or off.
    - **Spice**: `mild` is the normal set; `unhinged` adds the wilder cards.
-   - **Style**: `3D` rendered cards, or `classic` for the original meme look.
+   - **Style**: `classic` (default) shows the original memes, or `3D` for rendered cards.
    - **Coach is**: who Coach looks like on the badge and cards: Muse Bot (default), Coach, or Dog.
    - **Test reaction**: fires one so you can see and hear it.
 3. Sounds play on the overlay page. Browsers mute a page until you click it once; if a sting was
