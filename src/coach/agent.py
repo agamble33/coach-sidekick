@@ -87,6 +87,10 @@ def instructions_for(session: Session) -> str:
         text += "\n\n" + session.playbook.as_prompt()
         if session.teach:
             text += "\nThe player is NEW. Default to teaching: explain controls and goals as they come up, never assume they know."
+    elif session.briefs is not None and known:
+        brief = session.briefs.as_prompt(session.game)
+        if brief:
+            text += "\n\n" + brief
     if session.annotations is not None:
         learned = session.annotations.learned_prompt(session.game)
         if learned:

@@ -20,6 +20,7 @@ from .ingest import IngestError, VideoInfo, probe, sample_frames
 from .annotations import AnnotationStore
 from .incidents import CATEGORIES, SEVERITIES, IncidentStore, send_alert
 from .memory import MatchMemory
+from .gamebrief import GameBriefStore
 from .playbook import Playbook
 from .meta_api import MetaAPIError, MetaClient
 from .moments import MomentError, pick_clips
@@ -201,6 +202,7 @@ class Session:
     incidents: IncidentStore | None = None
     live_id: str = ""
     game_name: str = ""            # what Coach identified from the screen (set_game), used when there is no playbook or SDK name
+    briefs: "GameBriefStore | None" = None   # auto game brief written from the model's own knowledge when the game is named
     _info: VideoInfo | None = None
 
     @property
@@ -362,7 +364,8 @@ def t_set_game(s: Session, args: dict) -> str:
         return f"the game reports itself as {s.game_state.game}; keeping that"
     s.game_name = name
     s.record("callout", f"[game] {name}")
-    return f"game set to {name}"
+    brief = s.briefs.ensure(name, s.client) if s.briefs is not None else ""
+    return f"game set to {name}" + ("; brief ready" if brief else "")
 
 
 def t_callout(s: Session, args: dict) -> str:

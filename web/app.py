@@ -51,6 +51,7 @@ from coach.ingest import VIDEO_SUFFIXES, IngestError, probe
 from coach.memory import MatchMemory
 from coach.meta_api import MetaAPIError, MetaClient
 from coach.moments import pick_clips
+from coach.gamebrief import GameBriefStore
 from coach.playbook import PlaybookError, PlaybookStore
 from coach.tools import LiveFeed, Session
 from coach.voice import VoiceError, to_wav_24k, transcribe_file
@@ -165,6 +166,7 @@ def _guard(request: Request, kind: str) -> str:
         raise HTTPException(exc.status, exc.message)
     return sub
 app.state.playbooks = PlaybookStore(DATA / "playbook.json")
+app.state.briefs = GameBriefStore(DATA / "game_briefs")
 app.state.annotations = AnnotationStore(DATA / "annotations" / "records.jsonl")
 app.state.incidents = IncidentStore(DATA / "incidents" / "incidents.jsonl")
 
@@ -301,7 +303,7 @@ def _agent_for(mid: str | None, live_id: str | None = None) -> CoachAgent:
                               match=meta["name"] if meta else ("live session" if live_id else "no match"),
                               video=meta["video"] if meta else None, client=client, live=feed,
                               annotations=app.state.annotations, incidents=app.state.incidents,
-                              live_id=live_id or "")
+                              live_id=live_id or "", briefs=app.state.briefs)
             _agents[key] = CoachAgent(client, session)
         agent = _agents[key]
         agent.session.playbook = app.state.playbooks.load()      # always current
