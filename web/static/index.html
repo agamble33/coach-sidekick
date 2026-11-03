@@ -285,6 +285,8 @@
         <div class="row">
           <label class="toggle" title="Coach looks on its own and calls out only when something matters"><input id="autowatch" type="checkbox" checked> Auto callouts</label>
           <button id="cornerbtn" class="btn secondary" title="A small window with Coach that stays on top of your game">Corner mode</button>
+          <label class="toggle" title="Open the Overlay and Corner chat windows on their own when you go live"><input id="autoopen" type="checkbox" checked> Open Coach windows</label>
+          <button id="openPrompt" class="btn" hidden title="Your browser wants a click before Coach can open its windows">Show Coach</button>
           <button id="overlaybtn" class="btn secondary" title="Transparent page with Coach's pointers and task list: add it to OBS as a browser source, or open it over the game">Overlay</button>
           <button id="overlayhide" class="btn secondary" title="Hide or show the overlay (also the H key on this page, Ctrl+Shift+O in the PC overlay app)">Hide overlay (H)</button>
           <label class="toggle" title="Keep the task list off your game's minimap or chat">Tasks <select id="lay_tasks"><option value="bl">bottom left</option><option value="br">bottom right</option><option value="tl">top left</option><option value="tr">top right</option></select></label>
@@ -318,6 +320,7 @@
           <li><b>PC game, one screen:</b> click <b>Overlay</b>, then run the Coach PC overlay app (<a href="https://github.com/agamble33/coach-sidekick/blob/main/docs/pc-overlay.md" target="_blank" rel="noopener">docs/pc-overlay.md</a>) so arrows, tasks and memes sit on top of the game. Streaming? Add the Overlay link as an OBS Browser Source instead.</li>
           <li><b>PC VR (Quest Link, Air Link, Steam Link):</b> same Overlay link pinned in the headset with XSOverlay, OVR Toolkit or Desktop+ (<a href="https://github.com/agamble33/coach-sidekick/blob/main/docs/vr.md" target="_blank" rel="noopener">docs/vr.md</a>). PC audio goes into the headset, so Coach is in your ear.</li>
           <li><b>Standalone Quest (casting):</b> you hear Coach from the PC speakers; the overlay stays on the PC screen. Meta does not allow third-party overlays inside Quest games.</li>
+          <li><b>Windows:</b> with "Open Coach windows" on, the Overlay and the chat open by themselves when you go live. Say <b>"Coach, show overlay"</b> to bring them back.</li>
           <li><b>Hands-free:</b> press the headset button next to the mic and say <b>"Coach, where do I go?"</b>. <b>"Coach, stop talking"</b> mutes, <b>"Coach, talk to me"</b> unmutes.</li>
         </ol>
       </details>
@@ -706,12 +709,13 @@
       const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:5},audio:false});
       const r=await fetch('/api/live/start',{method:'POST',headers:consentHeaders()}); const j=await r.json(); if(r.status===403){ consentLost(); } if(!r.ok) throw new Error(j.detail||r.status);
       state.live=j.live_id; state.liveStream=stream;
-      const v=$('liveVideo'); v.srcObject=stream; await v.play().catch(()=>{});
+      const v=$('liveVideo'); v.srcObject=stream; v.play().catch(()=>{});   // not awaited: a share with no frames yet must not stall go live
       $('hero').hidden=true; $('matchCard').hidden=true; $('liveCard').hidden=false; tipsMode('live');
       stream.getVideoTracks()[0].addEventListener('ended', stopLive);
       add('msg from-coach',"I'm watching your screen. Play normally; I'll call out when something matters, or ask me anything.");
-      add('msg tip','Tip: click <b>Corner mode</b> for a small Coach window that stays on top of your game.');
       setStatus('Watching your game', true);
+      if($('autoopen').checked) await showCoachWindows();
+      else add('msg tip','Tip: <b>Overlay</b> puts arrows, tasks and memes over your game; <b>Corner mode</b> keeps the chat on top.');
       state.frameTimer=setInterval(pushFrame, FRAME_EVERY_MS); pushFrame();
       overlayHidden=false; $('overlayhide').textContent='Hide overlay (H)'; pushOverlaySettings(); sdkSync();
       state.watchTimer=setInterval(()=>{ if(!$('autowatch').checked || state.busy) return; if(!state.sceneChanged){ setStatus('Screen unchanged, Coach is holding', false); return; } state.sceneChanged=false; send('',{watch:true}); }, WATCH_EVERY_MS);
@@ -788,12 +792,30 @@
   let overlayHidden=false;
   async function toggleOverlay(){ if(!state.live) return; overlayHidden=!overlayHidden; $('overlayhide').textContent=(overlayHidden?'Show overlay (H)':'Hide overlay (H)'); await pushOverlaySettings({hidden:overlayHidden}); }
   $('overlayhide').onclick=toggleOverlay;
+  $('openPrompt').onclick=async()=>{ if(await showCoachWindows()) $('openPrompt').hidden=true; };
+  try{ $('autoopen').checked=localStorage.getItem('coachAutoOpen')!=='0'; }catch(e){}
+  $('autoopen').onchange=e=>{ try{ localStorage.setItem('coachAutoOpen', e.target.checked?'1':'0'); }catch(x){} };
   addEventListener('keydown',e=>{ if((e.key==='h'||e.key==='H') && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) toggleOverlay(); });
+  let overlayWin=null;
+  function openOverlay(){
+    if(!state.live) return false;
+    if(overlayWin && !overlayWin.closed){ overlayWin.focus(); return true; }
+    const url=location.origin+'/overlay?live='+state.live;
+    const w=Math.min(960, screen.availWidth-40), h=Math.round(w*9/16);
+    overlayWin=window.open(url,'coachOverlay',`popup=yes,width=${w},height=${h},left=${Math.round((screen.availWidth-w)/2)},top=80`);
+    return !!overlayWin;
+  }
+  async function showCoachWindows(){
+    // Overlay (arrows, tasks, memes) plus Corner mode (chat). Both need a recent click; otherwise ask for one.
+    const ok=openOverlay(); if(ok) await openCorner();
+    if(!ok){ $('openPrompt').hidden=false; add('msg tip','Your browser blocked the Coach windows. Click <b>Show Coach</b> once, or allow pop-ups for this page and it will be automatic next time.'); }
+    return ok;
+  }
   $('overlaybtn').onclick=async()=>{
     if(!state.live) return;
     const url=location.origin+'/overlay?live='+state.live;
     try{ await navigator.clipboard.writeText(url); }catch(e){}
-    window.open(url,'coachOverlay','popup=yes,width=960,height=540');
+    openOverlay();
     add('msg tip','Overlay link copied: <code>'+esc(url)+'</code>. In OBS add it as a Browser Source sized like your game capture; Coach\'s highlight boxes, task list and callouts draw there. It is transparent, so it also works pinned over the game or into VR.');
   };
 
@@ -827,10 +849,12 @@
   // "Coach" is sent. A few phrases are handled here without a model call: stop talking / talk to me.
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   const WAKE=/^(?:hey |ok |okay |yo )?coach[,.!?]?\s*(.*)$/i;
+  const SHOW=/^(?:show|open|bring up|pop up)\s+(?:the\s+)?(?:overlay|chat|window|yourself)\b/i;
   const QUIET=/^(?:stop talking|be quiet|quiet|shut up|mute|hush|enough)\b/i, TALK=/^(?:talk to me|unmute|you can talk|start talking|wake up)\b/i;
   state.muted=false; state.speaking=false; state.listening=false; let rec=null;
   function voiceCommand(said){
     if(QUIET.test(said)){ state.muted=true; $('autowatch').checked=false; speechSynthesis.cancel(); add('msg from-coach','Got it, going quiet. Say "Coach, talk to me" when you want me back.'); setStatus('Muted', false); return true; }
+    if(SHOW.test(said)){ showCoachWindows().then(ok=>{ speak(ok?'Overlay is up.':'Tap Show Coach once and I will keep it open.'); }); return true; }
     if(TALK.test(said)){ state.muted=false; $('autowatch').checked=true; add('msg from-coach','Back with you.'); speak('Back with you.'); setStatus('Listening for "Coach"', true); return true; }
     return false;
   }

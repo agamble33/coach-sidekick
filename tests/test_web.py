@@ -632,3 +632,10 @@ def test_dashboard_hands_free_and_player_readable_steps(client):
     assert 'id="listen"' in html and "Coach, stop talking" in html and "Coach, talk to me" in html
     assert "function plainStep(" in html and 'id="details"' in html and 'id="gameTag"' in html
     assert 'id="howto"' in html and "docs/vr.md" in html and "docs/pc-overlay.md" in html
+
+
+def test_coach_windows_open_on_go_live_and_by_voice(client):
+    html = client[0].get("/").text
+    assert 'id="autoopen"' in html and "function showCoachWindows(" in html and 'id="openPrompt"' in html
+    assert "Coach, show overlay" in html
+    assert "v.play().catch(()=>{});   // not awaited" in html     # a frameless share must not stall go live
