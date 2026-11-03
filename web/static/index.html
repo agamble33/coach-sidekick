@@ -113,9 +113,15 @@
   /* Theater: the live view and the chat, nothing else, for playing and recording */
   body.theater .hero,body.theater #abilitiesCard,body.theater #pbCard,body.theater #dataCard,body.theater #memoryCard,body.theater #clipsCard,body.theater .dock{display:none}
   body.theater .wrap{grid-template-columns:minmax(0,2.2fr) minmax(320px,.8fr);max-width:1700px;padding-top:16px}
-  body.theater #liveCard>.row:first-child,body.theater #rxBar,body.theater #sdkBox,body.theater #howto{display:none}
+  body.theater #liveCard>.row:first-child,body.theater #advanced{display:none}
   body.theater #liveCard{padding:10px}
   body.theater .coach{min-height:420px}
+  /* while live: big video and big chat first, everything else below */
+  body.live .wrap{grid-template-columns:minmax(0,2fr) minmax(380px,1fr);max-width:1700px}
+  body.live .coach{min-height:640px;max-height:calc(100vh - 90px)}
+  body.live .msg{font-size:15.5px} body.live .composer textarea{font-size:16px}
+  body.live #liveCard .sub{display:none}
+  @media (max-width:980px){body.live .wrap{grid-template-columns:1fr}}
   #theaterExit{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:6;display:none}
   body.theater #theaterExit{display:inline-flex}
   .icon:hover{background:var(--blue-tint)}
@@ -318,34 +324,40 @@
     </div>
 
     <div id="liveCard" class="card" hidden>
-      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <div class="row" style="justify-content:space-between;margin-bottom:12px;gap:12px">
         <div><h2><span class="livedot"></span>Live: Coach is watching your game</h2><p class="sub" id="liveInfo" style="margin:0">Sharing your screen. A frame goes to Coach every few seconds.</p></div>
-        <div class="row">
-          <label class="toggle" title="Coach looks on its own and calls out only when something matters"><input id="autowatch" type="checkbox" checked> Auto callouts</label>
-          <button id="cornerbtn" class="btn secondary" title="A small window with Coach that stays on top of your game">Corner mode</button>
-          <label class="toggle" title="Open the Overlay and Corner chat windows on their own when you go live"><input id="autoopen" type="checkbox"> Open Coach windows</label>
-          <button id="openPrompt" class="btn" hidden title="Your browser wants a click before Coach can open its windows">Show Coach</button>
+        <div class="row" id="liveMain">
           <button id="theater" class="btn" title="Big live view with Coach's arrows, tasks and memes drawn right on it, plus the chat. Best for playing and recording.">Theater</button>
-          <button id="overlaybtn" class="btn secondary" title="Transparent page with Coach's pointers and task list: add it to OBS as a browser source, or open it over the game">Overlay</button>
-          <button id="overlayhide" class="btn secondary" title="Hide or show the overlay (also the H key on this page, Ctrl+Shift+O in the PC overlay app)">Hide overlay (H)</button>
-          <label class="toggle" title="Keep the task list off your game's minimap or chat">Tasks <select id="lay_tasks"><option value="bl">bottom left</option><option value="br">bottom right</option><option value="tl">top left</option><option value="tr">top right</option></select></label>
-          <label class="toggle" title="Where Coach's callout banner shows">Callout <select id="lay_callout"><option value="top">top</option><option value="bottom">bottom</option></select></label>
-          <label class="toggle" title="The small Coach badge">Badge <select id="lay_badge"><option value="tl">top left</option><option value="tr">top right</option><option value="bl">bottom left</option><option value="br">bottom right</option><option value="off">off</option></select></label>
+          <label class="toggle" title="Coach looks on its own and calls out only when something matters"><input id="autowatch" type="checkbox" checked> <b>Auto callouts</b></label>
+          <label class="toggle" title="Coach flashes a meme card and plays a sound when you whiff a jump, do something dumb, ignore a callout, pull off a clutch, or start flirting mid-match"><input id="rx_on" type="checkbox" checked> <b>Memes</b></label>
+          <label class="toggle" title="Let Coach draw arrows and numbered routes on your overlay when you ask where to go. Off means Coach only talks."><input id="gd_on" type="checkbox"> <b>Guide me</b></label>
+          <button id="moreBtn" class="btn secondary" title="Layout, windows, meme style, tests, and the game SDK">More settings</button>
           <button id="stoplive" class="btn secondary">Stop sharing</button>
         </div>
       </div>
-      <div id="rxBar" class="row" style="margin:-4px 0 12px;padding:10px 12px;border-radius:12px;background:var(--surface)">
-        <span class="hudtag pink">LOADOUT</span>
-        <label class="toggle" title="Coach flashes a meme card and plays a sound when you whiff a jump, do something dumb, ignore a callout, pull off a clutch, or start flirting mid-match"><input id="rx_on" type="checkbox" checked> <b>Meme reactions</b></label>
-        <label class="toggle" title="How spicy Coach gets. Mild is the normal set; Unhinged adds the wilder cards">Spice <select id="rx_spice"><option value="mild">mild</option><option value="unhinged">unhinged</option></select></label>
-        <label class="toggle" title="Classic: the original memes. 3D: rendered cards">Style <select id="rx_pack"><option value="classic">classic</option><option value="3d">3D</option></select></label>
-        <label class="toggle" title="Who Coach looks like on the overlay badge and reaction cards">Coach is <select id="rx_avatar"><option value="muse_bot">Muse Bot</option><option value="coach">Coach</option><option value="dog">Dog</option></select></label>
-        <button id="rx_test" class="btn secondary" title="Fire one reaction on the overlay so you can see and hear it">Test reaction</button>
-        <span style="width:1px;height:22px;background:var(--border)"></span>
-        <label class="toggle" title="Let Coach draw arrows and numbered routes on your overlay when you ask where to go. Off means Coach only talks."><input id="gd_on" type="checkbox"> <b>Guide me</b> (arrows)</label>
-        <button id="gd_test" class="btn secondary" title="Draw a sample arrow on the overlay">Test arrow</button>
-        <span class="chip" id="rx_hint" title="Sounds play on the overlay page. Browsers mute a page until you click it once; OBS browser sources are never muted.">Sounds play on the Overlay</span>
-      </div>
+      <details id="advanced" style="margin:-4px 0 12px">
+        <summary style="list-style:none;cursor:pointer;display:none">More settings</summary>
+        <div id="rxBar" class="row" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--surface)">
+          <span class="hudtag pink">LOADOUT</span>
+          <label class="toggle" title="How spicy Coach gets. Mild is the normal set; Unhinged adds the wilder cards">Spice <select id="rx_spice"><option value="mild">mild</option><option value="unhinged">unhinged</option></select></label>
+          <label class="toggle" title="Classic: the original memes. 3D: rendered cards">Style <select id="rx_pack"><option value="classic">classic</option><option value="3d">3D</option></select></label>
+          <label class="toggle" title="Who Coach looks like on the overlay badge and reaction cards">Coach is <select id="rx_avatar"><option value="muse_bot">Muse Bot</option><option value="coach">Coach</option><option value="dog">Dog</option></select></label>
+          <button id="rx_test" class="btn secondary" title="Fire one reaction on the overlay so you can see and hear it">Test reaction</button>
+          <button id="gd_test" class="btn secondary" title="Draw a sample arrow on the overlay">Test arrow</button>
+          <span class="chip" id="rx_hint" title="Sounds play on the overlay page. Browsers mute a page until you click it once; OBS browser sources are never muted.">Sounds play on the Overlay</span>
+        </div>
+        <div class="row" id="winBar" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--border)">
+          <span class="hudtag">WINDOWS</span>
+          <button id="overlaybtn" class="btn secondary" title="Transparent page with Coach's pointers and task list: add it to OBS as a browser source, or open it over the game">Overlay</button>
+          <button id="cornerbtn" class="btn secondary" title="A small window with Coach that stays on top of your game">Corner mode</button>
+          <button id="overlayhide" class="btn secondary" title="Hide or show the overlay (also the H key on this page, Ctrl+Shift+O in the PC overlay app)">Hide overlay (H)</button>
+          <label class="toggle" title="Open the Overlay and Corner chat windows on their own when you go live"><input id="autoopen" type="checkbox"> Open Coach windows</label>
+          <button id="openPrompt" class="btn" hidden title="Your browser wants a click before Coach can open its windows">Show Coach</button>
+          <span style="width:1px;height:22px;background:var(--border)"></span>
+          <label class="toggle" title="Keep the task list off your game's minimap or chat">Tasks <select id="lay_tasks"><option value="bl">bottom left</option><option value="br">bottom right</option><option value="tl">top left</option><option value="tr">top right</option></select></label>
+          <label class="toggle" title="Where Coach's callout banner shows">Callout <select id="lay_callout"><option value="top">top</option><option value="bottom">bottom</option></select></label>
+          <label class="toggle" title="The small Coach badge">Badge <select id="lay_badge"><option value="tl">top left</option><option value="tr">top right</option><option value="bl">bottom left</option><option value="br">bottom right</option><option value="off">off</option></select></label>
+        </div>
       <div id="sdkBox" class="row" style="margin:-4px 0 12px;padding:10px 12px;border-radius:12px;background:var(--surface);gap:8px">
         <b title="Make Coach part of your game: see docs/game-sdk.md">Game SDK</b>
         <span class="chip">live id <code id="sdk_live" style="margin-left:6px"></code></span>
@@ -362,6 +374,7 @@
           <li><b>Windows:</b> with "Open Coach windows" on, the Overlay and the chat open by themselves when you go live. Say <b>"Coach, show overlay"</b> to bring them back.</li>
           <li><b>Hands-free:</b> press the headset button next to the mic and say <b>"Coach, where do I go?"</b>. <b>"Coach, stop talking"</b> mutes, <b>"Coach, talk to me"</b> unmutes.</li>
         </ol>
+      </details>
       </details>
       <div class="player" id="livePlayer"><video id="liveVideo" autoplay muted playsinline></video><iframe id="ovFrame" class="ovframe" title="Coach overlay" allow="autoplay" hidden></iframe><div class="livebadge" id="liveBadge">LIVE</div></div>
       <canvas id="grab" hidden></canvas>
@@ -767,6 +780,7 @@
       state.frameTimer=setInterval(pushFrame, FRAME_EVERY_MS); pushFrame();
       overlayHidden=false; $('overlayhide').textContent='Hide overlay (H)'; pushOverlaySettings(); sdkSync();
       $('ovFrame').src='/overlay?live='+state.live+'&embed=1'; $('ovFrame').hidden=false; $('liveBadge').hidden=true;   // the overlay has its own badge
+      document.body.classList.add('live');
       state.watchTimer=setInterval(()=>{ if(!$('autowatch').checked || state.busy) return; if(!state.sceneChanged){ setStatus('Screen unchanged, Coach is holding', false); return; } state.sceneChanged=false; send('',{watch:true}); }, WATCH_EVERY_MS);
     }catch(e){ add('msg err','Could not start live mode: '+e.message); }
   }
@@ -790,7 +804,7 @@
     const id=state.live; state.live=null; state.liveStream=null;
     fetch(`/api/live/${id}/stop`,{method:'POST'}).catch(()=>{});
     $('liveCard').hidden=true; if(state.match) $('matchCard').hidden=false; else $('hero').hidden=false; tipsMode('match');
-    $('ovFrame').hidden=true; $('ovFrame').src='about:blank'; $('liveBadge').hidden=false; document.body.classList.remove('theater');
+    $('ovFrame').hidden=true; $('ovFrame').src='about:blank'; $('liveBadge').hidden=false; document.body.classList.remove('theater'); document.body.classList.remove('live');
     setStatus('Ready when you are', false); add('msg from-coach','Stopped watching. Load a match or go live again whenever.'); cornerSync();
   }
   $('golive').onclick=goLive; $('golive2').onclick=goLive; $('stoplive').onclick=stopLive; $('cornerbtn').onclick=()=>openCorner(false);
@@ -842,6 +856,7 @@
   let overlayHidden=false;
   async function toggleOverlay(){ if(!state.live) return; overlayHidden=!overlayHidden; $('overlayhide').textContent=(overlayHidden?'Show overlay (H)':'Hide overlay (H)'); await pushOverlaySettings({hidden:overlayHidden}); }
   $('overlayhide').onclick=toggleOverlay;
+  $('moreBtn').onclick=()=>{ const d=$('advanced'); d.open=!d.open; $('moreBtn').textContent=d.open?'Fewer settings':'More settings'; };
   function setTheater(on){ document.body.classList.toggle('theater', on); try{ localStorage.setItem('coachTheater', on?'1':'0'); }catch(e){} if(on) window.scrollTo({top:0}); }
   $('theater').onclick=()=>setTheater(true); $('theaterExit').onclick=()=>setTheater(false);
   document.addEventListener('keydown',e=>{ if(e.key==='Escape' && document.body.classList.contains('theater')) setTheater(false); });
@@ -936,7 +951,7 @@
   function applyTheme(t){ if(t==='light') root.setAttribute('data-theme','light'); else root.removeAttribute('data-theme'); $('theme').textContent=t==='light'?'Dark':'Light'; try{localStorage.setItem('coach-theme',t);}catch(e){} }
   try{ applyTheme(localStorage.getItem('coach-theme')||'dark'); }catch(e){ applyTheme('dark'); }
   document.querySelectorAll('.dock a[data-go]').forEach(a=>{ a.onclick=e=>{ e.preventDefault(); const id=a.dataset.go.split(',').find(i=>{ const el=$(i); return el && !el.hidden; }); const el=$(id||'hero'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); document.querySelectorAll('.dock a').forEach(x=>x.classList.toggle('on',x===a)); }; });
-  $('dockSettings').onclick=e=>{ e.preventDefault(); const t=state.live?$('rxBar'):$('howto'); if(state.live){ $('rxBar').scrollIntoView({behavior:'smooth',block:'center'}); $('rxBar').animate([{boxShadow:'0 0 0 0 rgba(25,230,140,.0)'},{boxShadow:'0 0 0 4px rgba(25,230,140,.6)'},{boxShadow:'0 0 0 0 rgba(25,230,140,0)'}],{duration:1200}); } else add('msg tip','Settings live in the <b>LOADOUT</b> strip once you go live: meme reactions, spice, style, who Coach is, Guide me, and the overlay layout.'); };
+  $('dockSettings').onclick=e=>{ e.preventDefault(); if(state.live){ $('advanced').open=true; $('moreBtn').textContent='Fewer settings'; $('rxBar').scrollIntoView({behavior:'smooth',block:'center'}); $('rxBar').animate([{boxShadow:'0 0 0 0 rgba(25,230,140,.0)'},{boxShadow:'0 0 0 4px rgba(25,230,140,.6)'},{boxShadow:'0 0 0 0 rgba(25,230,140,0)'}],{duration:1200}); } else add('msg tip','Settings live in the <b>LOADOUT</b> strip once you go live: meme reactions, spice, style, who Coach is, Guide me, and the overlay layout.'); };
   $('theme').onclick=()=>applyTheme(root.getAttribute('data-theme')==='light'?'dark':'light');
 
   // ---------- studio playbook ----------
