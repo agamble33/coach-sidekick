@@ -9,6 +9,15 @@
 
 Built for the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026). Coach is an independent project by Goals and Gambles LLC; it is not a Meta product and uses no Meta brand assets. Model names below are stated only to document which models it calls.
 
+> [!IMPORTANT]
+> **For judges: try the live demo**
+>
+> 1. Open **https://coach-coach-sidekick.onrender.com**
+> 2. When the page asks for an access code, paste one of these: **`judge-7f3k`**, **`judge-2mq9`** or **`judge-9xw1`**
+> 3. Type a question or click **Share screen** so Coach can watch your game.
+>
+> Each code has its own daily limit. If one says the limit is reached, use another. The first load can take up to a minute while the server wakes up.
+
 ## What is a Meta model call and what is not
 
 | Part | What it uses |
@@ -73,7 +82,7 @@ Each gate ships with tests and must pass before the next one starts.
 
 ## For judges: how to try Coach in 3 minutes
 
-1. **Open the hosted demo** at https://coach-coach-sidekick.onrender.com and paste the access code **judge-7f3k** when the page asks (or run it locally with the Quick start below). Tick **Details** at the bottom of the chat to see the raw tool calls.
+1. **Open the hosted demo** at https://coach-coach-sidekick.onrender.com and paste one of the judge access codes above when the page asks (or run it locally with the Quick start below). Tick **Details** at the bottom of the chat to see the raw tool calls.
 2. Click **Use the sample match**. The timeline shows the moments Coach detected (blue = scene change, amber = loud moment).
 3. Click **Clip the biggest moment**. Watch the right panel: Coach calls `find_moments`, `cut_clip` and `remember` itself. Each step card shows the real tool call and result. The clip appears under Highlights, the note under Match memory.
 4. Click **What's happening at 15 seconds?** Coach calls `look`, sends the frame to Muse Spark, and describes it.
